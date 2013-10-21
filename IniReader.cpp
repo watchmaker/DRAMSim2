@@ -100,11 +100,14 @@ unsigned EPOCH_LENGTH;
 //row accesses allowed before closing (open page)
 unsigned TOTAL_ROW_ACCESSES;
 
-// strings and their associated enums
+//strings and their associated enums
 string ROW_BUFFER_POLICY;
 string SCHEDULING_POLICY;
 string ADDRESS_MAPPING_SCHEME;
 string QUEUING_STRUCTURE;
+
+//string for log file
+string LOG_FILE;
 
 bool DEBUG_TRANS_Q;
 bool DEBUG_CMD_Q;
@@ -188,6 +191,10 @@ static ConfigMap configMap[] =
 	DEFINE_STRING_PARAM(SCHEDULING_POLICY,SYS_PARAM),
 	DEFINE_STRING_PARAM(ADDRESS_MAPPING_SCHEME,SYS_PARAM),
 	DEFINE_STRING_PARAM(QUEUING_STRUCTURE,SYS_PARAM),
+
+	//Log String
+	DEFINE_STRING_PARAM(LOG_FILE,SYS_PARAM),
+
 	// debug flags
 	DEFINE_BOOL_PARAM(DEBUG_TRANS_Q,SYS_PARAM),
 	DEFINE_BOOL_PARAM(DEBUG_CMD_Q,SYS_PARAM),
@@ -457,6 +464,11 @@ bool IniReader::CheckIfAllSet()
 				DEBUG("\tSetting Default: "<<configMap[i].iniKey<<"=false");
 				break;
 			case STRING:
+			        if(configMap[i].iniKey == "LOG_FILE")
+			        {
+				  LOG_FILE = "dramsim";
+				  DEBUG("\tSetting Default: "<<configMap[i].iniKey<<"=dramsim");
+			        }
 				break;
 			}
 		}
