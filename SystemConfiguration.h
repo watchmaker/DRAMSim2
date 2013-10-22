@@ -133,6 +133,8 @@ extern std::string SCHEDULING_POLICY;
 extern std::string ADDRESS_MAPPING_SCHEME;
 extern std::string QUEUING_STRUCTURE;
 
+extern std::string LOG_FILE;
+
 enum TraceType
 {
 	k6,
