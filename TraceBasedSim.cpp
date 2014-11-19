@@ -383,100 +383,12 @@ OptionsMap parseParamOverrides(const string &kv_str)
 	return kv_map; 
 }
 
-int main(int argc, char **argv)
+void old_TBS(TraceType traceType, string traceFileName, string systemIniFilename, string deviceIniFilename, string pwdString, 
+	     string visFilename, unsigned megsOfMemory, bool useClockCycle)
 {
-	int c;
-	TraceType traceType;
-	string traceFileName;
-	string systemIniFilename("system.ini");
-	string deviceIniFilename;
-	string pwdString;
-	string visFilename("dramsim.vis");
-	unsigned megsOfMemory=2048;
-	bool useClockCycle=true;
-	
 	OptionsMap paramOverrides; 
 
 	unsigned numCycles=1000;
-	//getopt stuff
-	while (1)
-	{
-		static struct option long_options[] =
-		{
-			{"deviceini", required_argument, 0, 'd'},
-			{"tracefile", required_argument, 0, 't'},
-			{"systemini", required_argument, 0, 's'},
-
-			{"pwd", required_argument, 0, 'p'},
-			{"numcycles",  required_argument,	0, 'c'},
-			{"option",  required_argument,	0, 'o'},
-			{"quiet",  no_argument, &SHOW_SIM_OUTPUT, 'q'},
-			{"help", no_argument, 0, 'h'},
-			{"size", required_argument, 0, 'S'},
-			{"visfile", required_argument, 0, 'v'},
-			{0, 0, 0, 0}
-		};
-		int option_index=0; //for getopt
-		c = getopt_long (argc, argv, "t:s:c:d:o:p:S:v:qn", long_options, &option_index);
-		if (c == -1)
-		{
-			break;
-		}
-		switch (c)
-		{
-		case 0: //TODO: figure out what the hell this does, cuz it never seems to get called
-			if (long_options[option_index].flag != 0) //do nothing on a flag
-			{
-				printf("setting flag\n");
-				break;
-			}
-			printf("option %s",long_options[option_index].name);
-			if (optarg)
-			{
-				printf(" with arg %s", optarg);
-			}
-			printf("\n");
-			break;
-		case 'h':
-			usage();
-			exit(0);
-			break;
-		case 't':
-			traceFileName = string(optarg);
-			break;
-		case 's':
-			systemIniFilename = string(optarg);
-			break;
-		case 'd':
-			deviceIniFilename = string(optarg);
-			break;
-		case 'c':
-			numCycles = atoi(optarg);
-			break;
-		case 'S':
-			megsOfMemory=atoi(optarg);
-			break;
-		case 'p':
-			pwdString = string(optarg);
-			break;
-		case 'q':
-			SHOW_SIM_OUTPUT=false;
-			break;
-		case 'n':
-			useClockCycle=false;
-			break;
-		case 'o':
-			paramOverrides = parseParamOverrides(string(optarg)); 
-			break;
-		case 'v':
-			visFilename = string(optarg);
-			break;
-		case '?':
-			usage();
-			exit(-1);
-			break;
-		}
-	}
 
 	// get the trace filename
 	string temp = traceFileName.substr(traceFileName.find_last_of("/")+1);
@@ -625,5 +537,164 @@ int main(int argc, char **argv)
 		delete trans;
 	}
 	delete(memorySystem);
+}
+
+void simple_TBS(string traceFileName, string systemIniFilename, string deviceIniFilename, string pwdString, 
+	     string visFilename, unsigned megsOfMemory, bool useClockCycle)
+{
+	OptionsMap paramOverrides; 
+	
+	unsigned numCycles=1000;
+
+	// no default value for the default model name
+	if (deviceIniFilename.length() == 0)
+	{
+		ERROR("Please provide a device ini file");
+		usage();
+		exit(-1);
+	}
+
+
+	//ignore the pwd argument if the argument is an absolute path
+	if (pwdString.length() > 0 && traceFileName[0] != '/')
+	{
+		traceFileName = pwdString + "/" +traceFileName;
+	}
+
+	DEBUG("== Loading trace file '"<<traceFileName<<"' == ");
+
+	ifstream traceFile;
+	string line;
+
+
+	CSVWriter &CSVOut = CSVWriter::GetCSVWriterInstance(visFilename); 
+	MultiChannelMemorySystem *memorySystem = new MultiChannelMemorySystem(deviceIniFilename, systemIniFilename, pwdString, traceFileName, megsOfMemory, CSVOut, &paramOverrides);
+	// set the frequency ratio to 1:1
+	memorySystem->setCPUClockSpeed(0); 
+	std::ostream &dramsim_logfile = memorySystem->getLogFile(); 
+	Config &cfg = memorySystem->cfg;
+
+
+#ifdef RETURN_TRANSACTIONS
+	TransactionReceiver transactionReceiver; 
+	/* create and register our callback functions */
+	Callback_t *read_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::read_complete);
+	Callback_t *write_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::write_complete);
+	memorySystem->registerCallbacks(read_cb, write_cb, NULL);
+#endif
+}
+
+int main(int argc, char **argv)
+{
+	int c;
+	TraceType traceType;
+	string traceFileName;
+	string systemIniFilename("system.ini");
+	string deviceIniFilename;
+	string pwdString;
+	string visFilename("dramsim.vis");
+	unsigned megsOfMemory=2048;
+	bool useClockCycle=true;
+	stringstream ss;
+
+	bool KISS = false;
+	//getopt stuff
+	while (1)
+	{
+		static struct option long_options[] =
+		{
+			{"deviceini", required_argument, 0, 'd'},
+			{"tracefile", required_argument, 0, 't'},
+			{"systemini", required_argument, 0, 's'},
+
+			{"pwd", required_argument, 0, 'p'},
+			{"numcycles",  required_argument,	0, 'c'},
+			{"option",  required_argument,	0, 'o'},
+			{"quiet",  no_argument, &SHOW_SIM_OUTPUT, 'q'},
+			{"help", no_argument, 0, 'h'},
+			{"size", required_argument, 0, 'S'},
+			{"visfile", required_argument, 0, 'v'},
+			{"keep_simple", no_argument, 0, 'k'},
+			{"end_trans", required_argument, 0, 'e'},
+			{0, 0, 0, 0}
+		};
+		int option_index=0; //for getopt
+		c = getopt_long (argc, argv, "t:s:c:d:o:p:S:v:e:qkn", long_options, &option_index);
+		if (c == -1)
+		{
+			break;
+		}
+		switch (c)
+		{
+		case 0: //TODO: figure out what the hell this does, cuz it never seems to get called
+			if (long_options[option_index].flag != 0) //do nothing on a flag
+			{
+				printf("setting flag\n");
+				break;
+			}
+			printf("option %s",long_options[option_index].name);
+			if (optarg)
+			{
+				printf(" with arg %s", optarg);
+			}
+			printf("\n");
+			break;
+		case 'h':
+			usage();
+			exit(0);
+			break;
+		case 't':
+			traceFileName = string(optarg);
+			break;
+		case 's':
+			systemIniFilename = string(optarg);
+			break;
+		case 'd':
+			deviceIniFilename = string(optarg);
+			break;
+		case 'c':
+			numCycles = atoi(optarg);
+			break;
+		case 'S':
+			megsOfMemory=atoi(optarg);
+			break;
+		case 'p':
+			pwdString = string(optarg);
+			break;
+		case 'q':
+			SHOW_SIM_OUTPUT=false;
+			break;
+		case 'n':
+			useClockCycle=false;
+			break;
+		case 'o':
+			paramOverrides = parseParamOverrides(string(optarg)); 
+			break;
+		case 'v':
+			visFilename = string(optarg);
+			break;
+		case 'k':
+			KISS = true;
+			break;
+		case 'e':
+			ss << optarg;
+			ss >> stop_trans;
+			ss.clear();
+			break;
+		case '?':
+			usage();
+			exit(-1);
+			break;
+		}
+	}
+
+	if(KISS)
+	{
+		simple_TBS(traceFileName, systemIniFilename, deviceIniFilename, pwdString, visFilename, megsOfMemory, useClockCycle);
+	}
+	else
+	{
+		old_TBS(traceType, traceFileName, systemIniFilename, deviceIniFilename, pwdString, visFilename, megsOfMemory, useClockCycle);
+	}
 }
 #endif
