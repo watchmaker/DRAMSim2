@@ -549,7 +549,7 @@ void MemoryController::update()
 		}
 		else // no room, do nothing this cycle
 		{
-			//PRINT( "== Warning - No room in command queue" << endl;
+		        //cout << "== Warning - No room in command queue" << endl;
 		}
 	}
 

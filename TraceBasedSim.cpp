@@ -48,6 +48,7 @@
 #include "Transaction.h"
 #include "IniReader.h"
 #include "CSVWriter.h"
+#include "util.h"
 
 enum TraceType
 {
@@ -59,11 +60,30 @@ enum TraceType
 using namespace DRAMSim;
 using namespace std;
 
-//#define RETURN_TRANSACTIONS 1
+#define RETURN_TRANSACTIONS 1
 
 #ifndef _SIM_
 int SHOW_SIM_OUTPUT = 1;
 ofstream visDataOut; //mostly used in MemoryController
+
+const uint64_t MAX_PENDING = 1024;
+const uint64_t MIN_PENDING = 1023;
+uint64_t complete = 0;
+uint64_t pending = 0;
+uint64_t throttle_count = 0;
+uint64_t throttle_cycles = 0;
+uint64_t final_cycles = 0;
+uint64_t speedup_factor = 0;
+
+// The maximum transaction count for this simuation
+uint64_t START_TRANS = 0;
+uint64_t MAX_TRANS = 0;
+
+// The cycle counter is used to keep track of what cycle we are on.
+uint64_t trace_cycles = 0;
+
+uint64_t last_clock = 0;
+uint64_t CLOCK_DELAY = 1000000;
 
 #ifdef RETURN_TRANSACTIONS
 class TransactionReceiver
@@ -121,8 +141,16 @@ class TransactionReceiver
 
 			pendingReadRequests[address].pop_front();
 			numReads++;
-			cout << "Read Callback: #"<<numReads<<": 0x"<< std::hex << address << std::dec << " latency="<<latency<<"cycles ("<< done_cycle<< "->"<<added_cycle<<")"<<endl;
+			complete++;
+			pending--;
+			if ((complete % 1000 == 0) || (done_cycle - last_clock > CLOCK_DELAY))
+			{
+				cout << "complete= " << complete << "\t\tpending= " << pending << "\t\t cycle_count= "<< done_cycle << "\t\tthrottle_count=" << throttle_count << "\n";
+				last_clock = done_cycle;
+			}
+			//cout << "Read Callback: #"<<numReads<<": 0x"<< std::hex << address << std::dec << " latency="<<latency<<"cycles ("<< done_cycle<< "->"<<added_cycle<<")"<<endl;
 		}
+
 		void write_complete(unsigned id, uint64_t address, uint64_t done_cycle)
 		{
 			map<uint64_t, list<uint64_t> >::iterator it;
@@ -146,7 +174,14 @@ class TransactionReceiver
 
 			pendingWriteRequests[address].pop_front();
 			numWrites++;
-			cout << "Write Callback: #"<<numWrites<<" 0x"<< std::hex << address << std::dec << " latency="<<latency<<"cycles ("<< done_cycle<< "->"<<added_cycle<<")"<<endl;
+			complete++;
+			pending--;
+			if ((complete % 1000 == 0) || (done_cycle - last_clock > CLOCK_DELAY))
+			{
+				cout << "complete= " << complete << "\t\tpending= " << pending << "\t\t cycle_count= "<< done_cycle << "\t\tthrottle_count=" << throttle_count << "\n";
+				last_clock = done_cycle;
+			}
+			//cout << "Write Callback: #"<<numWrites<<" 0x"<< std::hex << address << std::dec << " latency="<<latency<<"cycles ("<< done_cycle<< "->"<<added_cycle<<")"<<endl;
 		}
 };
 #endif
@@ -383,16 +418,15 @@ OptionsMap parseParamOverrides(const string &kv_str)
 	return kv_map; 
 }
 
-void old_TBS(TraceType traceType, string traceFileName, string systemIniFilename, string deviceIniFilename, string pwdString, 
-	     string visFilename, unsigned megsOfMemory, bool useClockCycle)
+void old_TBS(string traceFileName, string systemIniFilename, string deviceIniFilename, string pwdString, 
+	     string visFilename, unsigned megsOfMemory, bool useClockCycle, OptionsMap paramOverrides, unsigned numCycles)
 {
-	OptionsMap paramOverrides; 
-
-	unsigned numCycles=1000;
+	 
 
 	// get the trace filename
 	string temp = traceFileName.substr(traceFileName.find_last_of("/")+1);
 
+	TraceType traceType;
 	//get the prefix of the trace name
 	temp = temp.substr(0,temp.find_first_of("_"));
 	if (temp=="mase")
@@ -438,8 +472,7 @@ void old_TBS(TraceType traceType, string traceFileName, string systemIniFilename
 	CSVWriter &CSVOut = CSVWriter::GetCSVWriterInstance(visFilename); 
 	MultiChannelMemorySystem *memorySystem = new MultiChannelMemorySystem(deviceIniFilename, systemIniFilename, pwdString, traceFileName, megsOfMemory, CSVOut, &paramOverrides);
 	// set the frequency ratio to 1:1
-	memorySystem->setCPUClockSpeed(0); 
-	std::ostream &dramsim_logfile = memorySystem->getLogFile(); 
+	memorySystem->setCPUClockSpeed(0);
 	Config &cfg = memorySystem->cfg;
 
 
@@ -540,12 +573,8 @@ void old_TBS(TraceType traceType, string traceFileName, string systemIniFilename
 }
 
 void simple_TBS(string traceFileName, string systemIniFilename, string deviceIniFilename, string pwdString, 
-	     string visFilename, unsigned megsOfMemory, bool useClockCycle)
+		string visFilename, unsigned megsOfMemory, bool useClockCycle, OptionsMap paramOverrides)
 {
-	OptionsMap paramOverrides; 
-	
-	unsigned numCycles=1000;
-
 	// no default value for the default model name
 	if (deviceIniFilename.length() == 0)
 	{
@@ -554,24 +583,12 @@ void simple_TBS(string traceFileName, string systemIniFilename, string deviceIni
 		exit(-1);
 	}
 
-
-	//ignore the pwd argument if the argument is an absolute path
-	if (pwdString.length() > 0 && traceFileName[0] != '/')
-	{
-		traceFileName = pwdString + "/" +traceFileName;
-	}
-
 	DEBUG("== Loading trace file '"<<traceFileName<<"' == ");
-
-	ifstream traceFile;
-	string line;
-
 
 	CSVWriter &CSVOut = CSVWriter::GetCSVWriterInstance(visFilename); 
 	MultiChannelMemorySystem *memorySystem = new MultiChannelMemorySystem(deviceIniFilename, systemIniFilename, pwdString, traceFileName, megsOfMemory, CSVOut, &paramOverrides);
 	// set the frequency ratio to 1:1
 	memorySystem->setCPUClockSpeed(0); 
-	std::ostream &dramsim_logfile = memorySystem->getLogFile(); 
 	Config &cfg = memorySystem->cfg;
 
 
@@ -582,12 +599,179 @@ void simple_TBS(string traceFileName, string systemIniFilename, string deviceIni
 	Callback_t *write_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::write_complete);
 	memorySystem->registerCallbacks(read_cb, write_cb, NULL);
 #endif
+
+	void *data = NULL;
+	Transaction *trans=NULL;
+	enum TransactionType transType;
+	// Open input file
+	ifstream inFile;
+	inFile.open(traceFileName.c_str(), ifstream::in);
+	if (!inFile.is_open())
+	{
+		cout << "ERROR: Failed to load tracefile: " << traceFileName << "\n";
+		abort();
+	}
+	
+
+	char char_line[256];
+	string line;
+	bool done = false;
+	uint64_t trans_count = 0;
+
+	// if we're fast forwarding some
+	if(START_TRANS != 0)
+	{
+		while(inFile.good() && !done)
+		{
+			inFile.getline(char_line, 256);
+			trans_count++;
+			if(trans_count >= START_TRANS)
+			{
+				done = true;
+			}
+		}		
+	}
+	done = false;
+	bool paused = false;
+	bool write = 0;
+
+	while (inFile.good() && !done)
+	{
+		if(!paused)
+		{
+			// Read the next line.
+			inFile.getline(char_line, 256);
+			line = (string)char_line;
+
+			// Filter comments out.
+			size_t pos = line.find("#");
+			line = line.substr(0, pos);
+			
+			// Strip whitespace from the ends.
+			line = strip(line);
+			
+			// Filter newlines out.
+			if (line.empty())
+				continue;
+			
+			// Split and parse.
+			list<string> split_line = split(line);
+			
+			if (split_line.size() != 3)
+			{
+				cout << "ERROR: Parsing trace failed on line:\n" << line << "\n";
+				cout << "There should be exactly three numbers per line\n";
+				cout << "There are " << split_line.size() << endl;
+				abort();
+			}
+			
+			uint64_t line_vals[3];
+			
+			int i = 0;
+			for (list<string>::iterator it = split_line.begin(); it != split_line.end(); it++, i++)
+			{
+				// convert string to integer
+				uint64_t tmp;
+				convert_uint64_t(tmp, (*it));
+				line_vals[i] = tmp;
+			}
+
+			// Finish parsing.
+			uint64_t trans_cycle;
+			if(speedup_factor != 0)
+			{
+				trans_cycle = line_vals[0] / speedup_factor;
+			}
+			else
+			{
+				trans_cycle = line_vals[0];
+			}
+			write = line_vals[1] % 2;
+			if(write == 0)
+				transType = DATA_READ;
+			else
+				transType = DATA_WRITE;
+			uint64_t addr = line_vals[2];
+
+			// increment the counter until >= the clock cycle of cur transaction
+			// for each cycle, call the update() function.
+			while (trace_cycles < trans_cycle)
+			{
+				memorySystem->update();
+				trace_cycles++;
+			}
+			trans = new Transaction(transType, addr, data, cfg);
+			alignTransactionAddress(*trans); 
+		}
+
+		// add the transaction and continue
+		if(memorySystem->addTransaction(trans))
+		{		
+			//memorySystem->addTransaction(write, addr);
+#ifdef RETURN_TRANSACTIONS
+				transactionReceiver.add_pending(*trans, trace_cycles); 
+#endif
+			pending++;
+			trans_count++;
+			paused = false;
+		}
+		else
+		{
+			paused = true;
+			memorySystem->update();
+			throttle_cycles++;
+		}
+			
+			// If the pending count goes above MAX_PENDING, wait until it goes back below MIN_PENDING before adding more 
+			// transactions. This throttling will prevent the memory system from getting overloaded.
+		if (pending >= MAX_PENDING)
+		{
+			//cout << "MAX_PENDING REACHED! Throttling the trace until pending is back below MIN_PENDING.\t\tcycle= " << trace_cycles << "\n";
+			throttle_count++;
+			while (pending > MIN_PENDING)
+			{
+				memorySystem->update();
+				throttle_cycles++;
+			}
+			//cout << "Back to MIN_PENDING. Allowing transactions to be added again.\t\tcycle= " << trace_cycles << "\n";
+		}
+
+		// check to see if we're done with the trace for now
+		if(MAX_TRANS != 0 && trans_count >= MAX_TRANS)
+			done = true;
+	}
+
+	inFile.close();
+
+
+	//mem->syncAll();
+
+
+	// Run update until all transactions come back.
+	while (pending > 0)
+	{
+		memorySystem->update();
+		final_cycles++;
+	}
+
+	// This is a hack for the moment to ensure that a final write completes.
+	// In the future, we need two callbacks to fix this.
+	// This is not counted towards the cycle counts for the run though.
+	//for (int i=0; i<1000000; i++)
+	//	memorySystem->update();
+
+	cout << "trace_cycles = " << trace_cycles << "\n";
+	cout << "throttle_count = " << throttle_count << "\n";
+	cout << "throttle_cycles = " << throttle_cycles << "\n";
+	cout << "final_cycles = " << final_cycles << "\n";
+	cout << "total_cycles = trace_cycles + throttle_cycles + final_cycles = " << trace_cycles + throttle_cycles + final_cycles << "\n\n";
+	
+	memorySystem->printStats(true);
 }
 
 int main(int argc, char **argv)
 {
 	int c;
-	TraceType traceType;
 	string traceFileName;
 	string systemIniFilename("system.ini");
 	string deviceIniFilename;
@@ -595,9 +779,12 @@ int main(int argc, char **argv)
 	string visFilename("dramsim.vis");
 	unsigned megsOfMemory=2048;
 	bool useClockCycle=true;
-	stringstream ss;
+	unsigned numCycles=1000;
+	OptionsMap paramOverrides; 
 
 	bool KISS = false;
+
+	stringstream ss;
 	//getopt stuff
 	while (1)
 	{
@@ -678,7 +865,7 @@ int main(int argc, char **argv)
 			break;
 		case 'e':
 			ss << optarg;
-			ss >> stop_trans;
+			ss >> MAX_TRANS;
 			ss.clear();
 			break;
 		case '?':
@@ -690,11 +877,11 @@ int main(int argc, char **argv)
 
 	if(KISS)
 	{
-		simple_TBS(traceFileName, systemIniFilename, deviceIniFilename, pwdString, visFilename, megsOfMemory, useClockCycle);
+		simple_TBS(traceFileName, systemIniFilename, deviceIniFilename, pwdString, visFilename, megsOfMemory, useClockCycle, paramOverrides);
 	}
 	else
 	{
-		old_TBS(traceType, traceFileName, systemIniFilename, deviceIniFilename, pwdString, visFilename, megsOfMemory, useClockCycle);
+		old_TBS(traceFileName, systemIniFilename, deviceIniFilename, pwdString, visFilename, megsOfMemory, useClockCycle, paramOverrides, numCycles);
 	}
 }
 #endif
