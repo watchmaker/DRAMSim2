@@ -29,48 +29,69 @@
 *********************************************************************************/
 
 
-#ifndef DRAMSIM_H
-#define DRAMSIM_H
-/*
- * This is a public header for DRAMSim including this along with libdramsim.so should
- * provide all necessary functionality to talk to an external simulator
- */
-#include "Callback.h"
-#include "CSVWriter.h"
-#include <stdio.h> 
-#include <string>
-#include <map>
-#include <list> 
+
+#ifndef MEMORYSYSTEM_H
+#define MEMORYSYSTEM_H
+
+//MemorySystem.h
+//
+//Header file for JEDEC memory system wrapper
+//
+#include <iostream>
+#include <deque>
 #include <vector>
+#include "Callback.h"
+#include "SimulatorObject.h"
 
-using std::string;
+using std::ostream; 
+using std::deque; 
+using std::vector; 
 
-namespace DRAMSim 
+namespace DRAMSim
 {
+class Config; 
+class CSVWriter; 
+class Rank; 
+class Transaction; 
+class MemoryController;
 
-	typedef std::map<std::string, std::string> OptionsMap;
-	typedef std::list<std::string> OptionsFailedToSet; 
+typedef void (*powerCallBack_t)(double bgpower, double burstpower, double refreshpower, double actprepower);
 
-	class CSVWriter; 
-	class DRAMSimInterface {
-		public: 
-			virtual uint64_t getCycle() = 0;
-			virtual bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelId=100, unsigned coreID=0) =0; 
-			virtual bool addTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelIdx=100, unsigned coreID=0) = 0;
-			virtual void update()=0;
+class MemorySystem : public SimulatorObject
+{
+public:
+	//functions
+	MemorySystem(unsigned id, unsigned megsOfMemory, Config &cfg_, CSVWriter &csvOut_, ostream &dramsim_log_);
+	virtual ~MemorySystem();
+	void update();
+	bool addTransaction(Transaction *trans);
+	bool addTransaction(bool isWrite, uint64_t addr);
+	void printStats(bool finalStats);
+	bool WillAcceptTransaction();
+	void RegisterCallbacks(
+	    Callback_t *readDone,
+	    Callback_t *writeDone,
+	    void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower));
 
-			virtual void setCPUClockSpeed(uint64_t cpuClkFreqHz) = 0;
-			virtual void simulationDone() = 0;
-			virtual float getUpdateClockPeriod()=0;
-			virtual void dumpStats(CSVWriter &CSVOut)=0;
+	//fields
+	Config &cfg; 
+	ostream &dramsim_log;
+	MemoryController *memoryController;
+	vector<Rank *> *ranks;
+	deque<Transaction *> pendingTransactions; 
 
-			virtual void registerCallbacks(
-				TransactionCompleteCB *readDone,
-				TransactionCompleteCB *writeDone,
-				void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower)) = 0 ;
-			virtual std::vector<uint64_t> returnDimensions() = 0;
-	};
-	DRAMSimInterface *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, CSVWriter &csvOut_, const OptionsMap *paramOverrides=NULL);
+
+	//function pointers
+	Callback_t* ReturnReadData;
+	Callback_t* WriteDataDone;
+	//TODO: make this a functor as well?
+	static powerCallBack_t ReportPower;
+	unsigned systemID;
+
+private:
+	CSVWriter &csvOut;
+};
 }
 
 #endif
+

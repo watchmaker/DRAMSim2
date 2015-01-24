@@ -1,7 +1,7 @@
 
 # Configure
 binDir     :=   /home/pkt3c/Simulators/DRAMSim2/bin
-libDir     :=   /home/pkt3c/Simulators/DRAMSim2/lib
+libDir     :=   /home/pkt3c/Simulators/DRAMSim2/
 includeDir :=   /home/pkt3c/Simulators/DRAMSim2/include
 srcDir     :=   .
 

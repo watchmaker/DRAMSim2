@@ -868,11 +868,26 @@ void MemoryController::printStats(bool finalStats)
 		{
 		//	cout << "c="<<myChannel<< " r="<<r<<"writing to csv out on cycle "<< currentClockCycle<<endl;
 			// write the vis file output
+			// just writing the headers
 			csvOut << CSVWriter::IndexedName("Background_Power",myChannel,r) <<backgroundPower[r];
 			csvOut << CSVWriter::IndexedName("ACT_PRE_Power",myChannel,r) << actprePower[r];
 			csvOut << CSVWriter::IndexedName("Burst_Power",myChannel,r) << burstPower[r];
 			csvOut << CSVWriter::IndexedName("Refresh_Power",myChannel,r) << refreshPower[r];
 			double totalRankBandwidth=0.0;
+			for (size_t b=0; b<cfg.NUM_BANKS; b++)
+			{
+				csvOut << CSVWriter::IndexedName("Bandwidth",myChannel,r,b) << bandwidth[SEQUENTIAL(r,b)];
+				csvOut << CSVWriter::IndexedName("Average_Latency",myChannel,r,b) << averageLatency[SEQUENTIAL(r,b)];
+			}
+			csvOut << CSVWriter::IndexedName("Rank_Aggregate_Bandwidth",myChannel,r) << totalRankBandwidth; 
+			csvOut << CSVWriter::IndexedName("Rank_Average_Bandwidth",myChannel,r) << totalRankBandwidth/cfg.NUM_RANKS; 
+			//csvOut.finalize();
+
+			// now writing the values
+			/*csvOut << CSVWriter::IndexedName("Background_Power",myChannel,r) <<backgroundPower[r];
+			csvOut << CSVWriter::IndexedName("ACT_PRE_Power",myChannel,r) << actprePower[r];
+			csvOut << CSVWriter::IndexedName("Burst_Power",myChannel,r) << burstPower[r];
+			csvOut << CSVWriter::IndexedName("Refresh_Power",myChannel,r) << refreshPower[r];
 			for (size_t b=0; b<cfg.NUM_BANKS; b++)
 			{
 				csvOut << CSVWriter::IndexedName("Bandwidth",myChannel,r,b) << bandwidth[SEQUENTIAL(r,b)];
@@ -882,12 +897,19 @@ void MemoryController::printStats(bool finalStats)
 			}
 			csvOut << CSVWriter::IndexedName("Rank_Aggregate_Bandwidth",myChannel,r) << totalRankBandwidth; 
 			csvOut << CSVWriter::IndexedName("Rank_Average_Bandwidth",myChannel,r) << totalRankBandwidth/cfg.NUM_RANKS; 
+			csvOut.finalize();*/
 		}
 	}
 	if (cfg.VIS_FILE_OUTPUT)
 	{
+		// just writing the headers
 		csvOut << CSVWriter::IndexedName("Aggregate_Bandwidth",myChannel) << totalAggregateBandwidth;
 		csvOut << CSVWriter::IndexedName("Average_Bandwidth",myChannel) << totalAggregateBandwidth / (cfg.NUM_RANKS*cfg.NUM_BANKS);
+		//csvOut.finalize();
+		// now writing the values
+		//csvOut << CSVWriter::IndexedName("Aggregate_Bandwidth",myChannel) << totalAggregateBandwidth;
+		//csvOut << CSVWriter::IndexedName("Average_Bandwidth",myChannel) << totalAggregateBandwidth / (cfg.NUM_RANKS*cfg.NUM_BANKS);
+		//csvOut.finalize();
 	}
 
 	// only print the latency histogram at the end of the simulation since it clogs the output too much to print every epoch

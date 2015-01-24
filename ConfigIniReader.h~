@@ -101,8 +101,7 @@ enum AddressMappingScheme
 	Scheme4,
 	Scheme5,
 	Scheme6,
-	Scheme7,
-	Scheme8
+	Scheme7
 };
 
 template <>
@@ -120,9 +119,7 @@ inline void ConfigOption<AddressMappingScheme>::set(const std::string &value_str
 	else if (value_str == "Scheme6")
 		value=Scheme6; 
 	else if (value_str == "Scheme7")
-		value=Scheme7;
-	else if (value_str == "Scheme8")
-		value=Scheme8; 
+		value=Scheme7; 
 }
 
 // Template specialization for enums setters from strings 

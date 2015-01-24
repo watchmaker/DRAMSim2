@@ -19,7 +19,7 @@ PARAM(unsigned,TRANS_QUEUE_DEPTH,64) // transaction queue, i.e., CPU-level comma
 PARAM(unsigned,CMD_QUEUE_DEPTH,64) // command queue, i.e., DRAM-level commands such as: CAS 544, RAS 4
 PARAM(unsigned,EPOCH_LENGTH,100000) // length of an epoch in cycles (granularity of simulation stats)
 
-PARAM(DRAMSim::RowBufferPolicy,rowBufferPolicy,ClosePage) // OpenPage or ClosePage
+PARAM(DRAMSim::RowBufferPolicy,rowBufferPolicy,OpenPage) // OpenPage or ClosePage
 PARAM(DRAMSim::AddressMappingScheme,addressMappingScheme,Scheme8) //valid Schemes 1-7; For multiple independent channels, use Scheme7 since it has the most parallelism 
 PARAM(DRAMSim::SchedulingPolicy,schedulingPolicy,RankThenBankRoundRobin) // BankThenRankRoundRobin or RankThenBankRoundRobin 
 PARAM(DRAMSim::QueuingStructure,queuingStructure,PerRank) //PerRank or PerRankPerBank

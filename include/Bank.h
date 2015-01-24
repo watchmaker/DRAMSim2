@@ -29,48 +29,55 @@
 *********************************************************************************/
 
 
-#ifndef DRAMSIM_H
-#define DRAMSIM_H
-/*
- * This is a public header for DRAMSim including this along with libdramsim.so should
- * provide all necessary functionality to talk to an external simulator
- */
-#include "Callback.h"
-#include "CSVWriter.h"
-#include <stdio.h> 
-#include <string>
-#include <map>
-#include <list> 
-#include <vector>
 
-using std::string;
 
-namespace DRAMSim 
+
+
+
+
+#ifndef BANK_H
+#define BANK_H
+
+//Bank.h
+//
+//Header file for bank class
+//
+
+#include "SystemConfiguration.h"
+#include "SimulatorObject.h"
+#include "BankState.h"
+#include "BusPacket.h"
+#include <iostream>
+
+namespace DRAMSim
 {
+class Bank
+{
+	typedef struct _DataStruct
+	{
+		unsigned row;
+		void *data;
+		struct _DataStruct *next;
+	} DataStruct;
 
-	typedef std::map<std::string, std::string> OptionsMap;
-	typedef std::list<std::string> OptionsFailedToSet; 
+public:
+	//functions
+	Bank(Config &cfg_, ostream &dramsim_log_);
+	void read(BusPacket *busPacket);
+	void write(const BusPacket *busPacket);
 
-	class CSVWriter; 
-	class DRAMSimInterface {
-		public: 
-			virtual uint64_t getCycle() = 0;
-			virtual bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelId=100, unsigned coreID=0) =0; 
-			virtual bool addTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelIdx=100, unsigned coreID=0) = 0;
-			virtual void update()=0;
+	//fields
+	Config &cfg;
+	BankState currentState;
 
-			virtual void setCPUClockSpeed(uint64_t cpuClkFreqHz) = 0;
-			virtual void simulationDone() = 0;
-			virtual float getUpdateClockPeriod()=0;
-			virtual void dumpStats(CSVWriter &CSVOut)=0;
+private:
+	// private member
+	std::vector<DataStruct *> rowEntries;
+	ostream &dramsim_log; 
 
-			virtual void registerCallbacks(
-				TransactionCompleteCB *readDone,
-				TransactionCompleteCB *writeDone,
-				void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower)) = 0 ;
-			virtual std::vector<uint64_t> returnDimensions() = 0;
-	};
-	DRAMSimInterface *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, CSVWriter &csvOut_, const OptionsMap *paramOverrides=NULL);
+	static DataStruct *searchForRow(unsigned row, DataStruct *head);
+};
 }
 
 #endif
+

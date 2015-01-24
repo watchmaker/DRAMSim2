@@ -29,48 +29,57 @@
 *********************************************************************************/
 
 
-#ifndef DRAMSIM_H
-#define DRAMSIM_H
-/*
- * This is a public header for DRAMSim including this along with libdramsim.so should
- * provide all necessary functionality to talk to an external simulator
- */
-#include "Callback.h"
-#include "CSVWriter.h"
-#include <stdio.h> 
-#include <string>
-#include <map>
-#include <list> 
+
+#ifndef SYSCONFIG_H
+#define SYSCONFIG_H
+
+#include <iostream>
+#include <fstream>
 #include <vector>
+#include <string>
+#include <cstdlib>
+#include <stdint.h>
+#include "PrintMacros.h"
 
-using std::string;
+#ifdef __APPLE__
+#include <sys/types.h>
+#endif
 
-namespace DRAMSim 
+//SystemConfiguration.h
+//
+//Configuration values for the current system
+
+extern std::ofstream cmd_verify_out; //used by BusPacket.cpp if VERIFICATION_OUTPUT is enabled
+
+namespace DRAMSim
 {
 
-	typedef std::map<std::string, std::string> OptionsMap;
-	typedef std::list<std::string> OptionsFailedToSet; 
+//
+//FUNCTIONS
+//
 
-	class CSVWriter; 
-	class DRAMSimInterface {
-		public: 
-			virtual uint64_t getCycle() = 0;
-			virtual bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelId=100, unsigned coreID=0) =0; 
-			virtual bool addTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelIdx=100, unsigned coreID=0) = 0;
-			virtual void update()=0;
-
-			virtual void setCPUClockSpeed(uint64_t cpuClkFreqHz) = 0;
-			virtual void simulationDone() = 0;
-			virtual float getUpdateClockPeriod()=0;
-			virtual void dumpStats(CSVWriter &CSVOut)=0;
-
-			virtual void registerCallbacks(
-				TransactionCompleteCB *readDone,
-				TransactionCompleteCB *writeDone,
-				void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower)) = 0 ;
-			virtual std::vector<uint64_t> returnDimensions() = 0;
-	};
-	DRAMSimInterface *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, CSVWriter &csvOut_, const OptionsMap *paramOverrides=NULL);
+unsigned inline dramsim_log2(unsigned value)
+{
+	unsigned logbase2 = 0;
+	unsigned orig = value;
+	value>>=1;
+	while (value>0)
+	{
+		value >>= 1;
+		logbase2++;
+	}
+	if (1U<<logbase2 < orig)
+		logbase2++;
+	return logbase2;
 }
 
+inline bool isPowerOfTwo(unsigned long x)
+{
+	return (1UL<<dramsim_log2(x)) == x;
+}
+
+
+};
+
 #endif
+

@@ -844,6 +844,7 @@ int main(int argc, char **argv)
 			break;
 		case 'S':
 			megsOfMemory=atoi(optarg);
+			cout << "set megsOfMemory to " << optarg << "\n";
 			break;
 		case 'p':
 			pwdString = string(optarg);

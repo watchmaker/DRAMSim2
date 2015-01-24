@@ -29,48 +29,76 @@
 *********************************************************************************/
 
 
-#ifndef DRAMSIM_H
-#define DRAMSIM_H
-/*
- * This is a public header for DRAMSim including this along with libdramsim.so should
- * provide all necessary functionality to talk to an external simulator
- */
-#include "Callback.h"
-#include "CSVWriter.h"
-#include <stdio.h> 
-#include <string>
-#include <map>
-#include <list> 
-#include <vector>
 
-using std::string;
 
-namespace DRAMSim 
+
+
+#ifndef CMDQUEUE_H
+#define CMDQUEUE_H
+
+//CommandQueue.h
+//
+//Header
+//
+
+#include "BusPacket.h"
+#include "BankState.h"
+#include "Transaction.h"
+#include "SystemConfiguration.h"
+#include "SimulatorObject.h"
+
+using namespace std;
+
+namespace DRAMSim
 {
+	class Config; 
+class CommandQueue : public SimulatorObject
+{
+	CommandQueue();
+	ostream &dramsim_log;
+	Config &cfg;
+public:
+	//typedefs
+	typedef vector<BusPacket *> BusPacket1D;
+	typedef vector<BusPacket1D> BusPacket2D;
+	typedef vector<BusPacket2D> BusPacket3D;
 
-	typedef std::map<std::string, std::string> OptionsMap;
-	typedef std::list<std::string> OptionsFailedToSet; 
+	//functions
+	CommandQueue(vector< vector<BankState> > &states, ostream &dramsim_log, Config &cfg_);
+	virtual ~CommandQueue(); 
 
-	class CSVWriter; 
-	class DRAMSimInterface {
-		public: 
-			virtual uint64_t getCycle() = 0;
-			virtual bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelId=100, unsigned coreID=0) =0; 
-			virtual bool addTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelIdx=100, unsigned coreID=0) = 0;
-			virtual void update()=0;
+	void enqueue(BusPacket *newBusPacket);
+	bool pop(BusPacket **busPacket);
+	bool hasRoomFor(unsigned numberToEnqueue, unsigned rank, unsigned bank);
+	bool isIssuable(BusPacket *busPacket);
+	bool isEmpty(unsigned rank);
+	void needRefresh(unsigned rank);
+	void print();
+	void update(); //SimulatorObject requirement
+	vector<BusPacket *> &getCommandQueue(unsigned rank, unsigned bank);
 
-			virtual void setCPUClockSpeed(uint64_t cpuClkFreqHz) = 0;
-			virtual void simulationDone() = 0;
-			virtual float getUpdateClockPeriod()=0;
-			virtual void dumpStats(CSVWriter &CSVOut)=0;
+	//fields
+	
+	BusPacket3D queues; // 3D array of BusPacket pointers
+	vector< vector<BankState> > &bankStates;
+private:
+	void nextRankAndBank(unsigned &rank, unsigned &bank);
+	//fields
+	unsigned nextBank;
+	unsigned nextRank;
 
-			virtual void registerCallbacks(
-				TransactionCompleteCB *readDone,
-				TransactionCompleteCB *writeDone,
-				void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower)) = 0 ;
-			virtual std::vector<uint64_t> returnDimensions() = 0;
-	};
-	DRAMSimInterface *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, CSVWriter &csvOut_, const OptionsMap *paramOverrides=NULL);
+	unsigned nextBankPRE;
+	unsigned nextRankPRE;
+
+	unsigned refreshRank;
+	bool refreshWaiting;
+
+	vector< vector<unsigned> > tFAWCountdown;
+	vector< vector<unsigned> > rowAccessCounters;
+
+	bool sendAct;
+};
 }
 
 #endif
+

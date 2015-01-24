@@ -28,49 +28,49 @@
 *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *********************************************************************************/
 
+#ifndef TRANSACTION_H
+#define TRANSACTION_H
 
-#ifndef DRAMSIM_H
-#define DRAMSIM_H
-/*
- * This is a public header for DRAMSim including this along with libdramsim.so should
- * provide all necessary functionality to talk to an external simulator
- */
-#include "Callback.h"
-#include "CSVWriter.h"
-#include <stdio.h> 
-#include <string>
-#include <map>
-#include <list> 
-#include <vector>
+//Transaction.h
+//
+//Header file for transaction object
 
-using std::string;
+#include "SystemConfiguration.h"
+#include "BusPacket.h"
 
-namespace DRAMSim 
+using std::ostream; 
+
+namespace DRAMSim
 {
+enum TransactionType
+{
+	DATA_READ,
+	DATA_WRITE,
+	RETURN_DATA
+};
 
-	typedef std::map<std::string, std::string> OptionsMap;
-	typedef std::list<std::string> OptionsFailedToSet; 
+class Transaction
+{
+	Transaction();
+public:
+	//fields
+	Config &cfg; 
+	TransactionType transactionType;
+	uint64_t address;
+	void *data;
+	uint64_t timeAdded;
+	uint64_t timeReturned;
 
-	class CSVWriter; 
-	class DRAMSimInterface {
-		public: 
-			virtual uint64_t getCycle() = 0;
-			virtual bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelId=100, unsigned coreID=0) =0; 
-			virtual bool addTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelIdx=100, unsigned coreID=0) = 0;
-			virtual void update()=0;
 
-			virtual void setCPUClockSpeed(uint64_t cpuClkFreqHz) = 0;
-			virtual void simulationDone() = 0;
-			virtual float getUpdateClockPeriod()=0;
-			virtual void dumpStats(CSVWriter &CSVOut)=0;
+	friend ostream &operator<<(ostream &os, const Transaction &t);
+	//functions
+	Transaction(TransactionType transType, uint64_t addr, void *data, Config &cfg);
+	Transaction(const Transaction &t);
 
-			virtual void registerCallbacks(
-				TransactionCompleteCB *readDone,
-				TransactionCompleteCB *writeDone,
-				void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower)) = 0 ;
-			virtual std::vector<uint64_t> returnDimensions() = 0;
-	};
-	DRAMSimInterface *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, CSVWriter &csvOut_, const OptionsMap *paramOverrides=NULL);
+	BusPacketType getBusPacketType();
+};
+
 }
 
 #endif
+

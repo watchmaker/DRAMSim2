@@ -29,48 +29,41 @@
 *********************************************************************************/
 
 
-#ifndef DRAMSIM_H
-#define DRAMSIM_H
-/*
- * This is a public header for DRAMSim including this along with libdramsim.so should
- * provide all necessary functionality to talk to an external simulator
- */
-#include "Callback.h"
-#include "CSVWriter.h"
-#include <stdio.h> 
-#include <string>
-#include <map>
-#include <list> 
-#include <vector>
 
-using std::string;
 
-namespace DRAMSim 
-{
 
-	typedef std::map<std::string, std::string> OptionsMap;
-	typedef std::list<std::string> OptionsFailedToSet; 
+#ifndef PRINT_MACROS_H
+#define PRINT_MACROS_H
 
-	class CSVWriter; 
-	class DRAMSimInterface {
-		public: 
-			virtual uint64_t getCycle() = 0;
-			virtual bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelId=100, unsigned coreID=0) =0; 
-			virtual bool addTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelIdx=100, unsigned coreID=0) = 0;
-			virtual void update()=0;
+extern int SHOW_SIM_OUTPUT; //enable or disable PRINT() statements -- set by flag in TraceBasedSim.cpp
 
-			virtual void setCPUClockSpeed(uint64_t cpuClkFreqHz) = 0;
-			virtual void simulationDone() = 0;
-			virtual float getUpdateClockPeriod()=0;
-			virtual void dumpStats(CSVWriter &CSVOut)=0;
+#define ERROR(str) std::cerr<<"[ERROR ("<<__FILE__<<":"<<__LINE__<<")]: "<<str<<std::endl;
 
-			virtual void registerCallbacks(
-				TransactionCompleteCB *readDone,
-				TransactionCompleteCB *writeDone,
-				void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower)) = 0 ;
-			virtual std::vector<uint64_t> returnDimensions() = 0;
-	};
-	DRAMSimInterface *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, CSVWriter &csvOut_, const OptionsMap *paramOverrides=NULL);
-}
+using std::ostream;
 
+#ifdef DEBUG_BUILD
+	#define DEBUG(str)  std::cerr<< str <<std::endl;
+	#define DEBUGN(str) std::cerr<< str;
+#else
+	#define DEBUG(str) ;
+	#define DEBUGN(str) ;
 #endif
+
+#ifdef NO_OUTPUT
+	#undef DEBUG
+	#undef DEBUGN
+	#define DEBUG(str) ;
+	#define DEBUGN(str) ;
+	#define PRINT(str) ;
+	#define PRINTN(str) ;
+#else
+	#ifdef LOG_OUTPUT
+		#define PRINT(str)  { dramsim_log <<str<<std::endl; }
+		#define PRINTN(str) { dramsim_log <<str; }
+	#else
+		#define PRINT(str)  if(SHOW_SIM_OUTPUT) { std::cout <<str<<std::endl; }
+		#define PRINTN(str) if(SHOW_SIM_OUTPUT) { std::cout <<str; }
+	#endif
+#endif
+
+#endif /*PRINT_MACROS_H*/

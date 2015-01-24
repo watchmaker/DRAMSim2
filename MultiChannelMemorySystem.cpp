@@ -387,14 +387,18 @@ bool MultiChannelMemorySystem::willAcceptTransaction()
 
 void MultiChannelMemorySystem::printStats(bool finalStats) {
 
-	csvOut << "ms" <<currentClockCycle * cfg.tCK * 1E-6; 
+	//csvOut << "ms" <<currentClockCycle * cfg.tCK * 1E-6;
+	//csvOut.finalize();
+	//csvOut << "ms" <<currentClockCycle * cfg.tCK * 1E-6;
+	//csvOut.finalize();
 	for (size_t i=0; i<cfg.NUM_CHANS; i++)
 	{
 		PRINT("==== Channel ["<<i<<"] ====");
 		channels[i]->printStats(finalStats); 
 		PRINT("//// Channel ["<<i<<"] ////");
 	}
-//	csvOut.finalize();
+	//csvOut.finalize();
+
 }
 void MultiChannelMemorySystem::registerCallbacks( 
 		TransactionCompleteCB *readDone,
@@ -414,4 +418,15 @@ DRAMSimInterface *getMemorySystemInstance(const string &dev, const string &sys, 
 {
 	return new MultiChannelMemorySystem(dev, sys, pwd, trc, megsOfMemory, csvOut, paramOverrides);
 }
+
+std::vector<uint64_t> MultiChannelMemorySystem::returnDimensions(){
+	std::vector<uint64_t> dims;
+	dims.push_back(cfg.NUM_CHANS);
+	dims.push_back(cfg.NUM_RANKS);
+	dims.push_back(cfg.NUM_BANKS);
+	dims.push_back(cfg.NUM_ROWS);
+	dims.push_back(cfg.NUM_COLS);
+	return dims;
+}
+
 } // namespace 

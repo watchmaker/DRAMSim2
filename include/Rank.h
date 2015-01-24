@@ -29,48 +29,58 @@
 *********************************************************************************/
 
 
-#ifndef DRAMSIM_H
-#define DRAMSIM_H
-/*
- * This is a public header for DRAMSim including this along with libdramsim.so should
- * provide all necessary functionality to talk to an external simulator
- */
-#include "Callback.h"
-#include "CSVWriter.h"
-#include <stdio.h> 
-#include <string>
-#include <map>
-#include <list> 
-#include <vector>
 
-using std::string;
 
-namespace DRAMSim 
+#ifndef RANK_H
+#define RANK_H
+
+#include "SimulatorObject.h"
+#include "BusPacket.h"
+#include "SystemConfiguration.h"
+#include "Bank.h"
+#include "BankState.h"
+
+using namespace std;
+using namespace DRAMSim;
+
+namespace DRAMSim
 {
+class MemoryController; //forward declaration
+class Rank : public SimulatorObject
+{
+private:
+	MemoryController &memoryController;
+	Config &cfg; 
+	int id;
+	ostream &dramsim_log; 
+	unsigned incomingWriteBank;
+	unsigned incomingWriteRow;
+	unsigned incomingWriteColumn;
+	bool isPowerDown;
 
-	typedef std::map<std::string, std::string> OptionsMap;
-	typedef std::list<std::string> OptionsFailedToSet; 
+public:
+	//functions
+	Rank(MemoryController &memoryController_, ostream &dramsim_log_);
+	virtual ~Rank(); 
+	void receiveFromBus(BusPacket *packet);
+	int getId() const;
+	void setId(int id);
+	void update();
+	void powerUp();
+	void powerDown();
 
-	class CSVWriter; 
-	class DRAMSimInterface {
-		public: 
-			virtual uint64_t getCycle() = 0;
-			virtual bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelId=100, unsigned coreID=0) =0; 
-			virtual bool addTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelIdx=100, unsigned coreID=0) = 0;
-			virtual void update()=0;
+	//fields
+	BusPacket *outgoingDataPacket;
+	unsigned dataCyclesLeft;
+	bool refreshWaiting;
 
-			virtual void setCPUClockSpeed(uint64_t cpuClkFreqHz) = 0;
-			virtual void simulationDone() = 0;
-			virtual float getUpdateClockPeriod()=0;
-			virtual void dumpStats(CSVWriter &CSVOut)=0;
+	//these are vectors so that each element is per-bank
+	vector<BusPacket *> readReturnPacket;
+	vector<unsigned> readReturnCountdown;
+	vector<Bank> banks;
+	vector<BankState> bankStates;
 
-			virtual void registerCallbacks(
-				TransactionCompleteCB *readDone,
-				TransactionCompleteCB *writeDone,
-				void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower)) = 0 ;
-			virtual std::vector<uint64_t> returnDimensions() = 0;
-	};
-	DRAMSimInterface *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, CSVWriter &csvOut_, const OptionsMap *paramOverrides=NULL);
+};
 }
-
 #endif
+

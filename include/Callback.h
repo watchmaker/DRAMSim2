@@ -29,48 +29,59 @@
 *********************************************************************************/
 
 
-#ifndef DRAMSIM_H
-#define DRAMSIM_H
-/*
- * This is a public header for DRAMSim including this along with libdramsim.so should
- * provide all necessary functionality to talk to an external simulator
- */
-#include "Callback.h"
-#include "CSVWriter.h"
-#include <stdio.h> 
-#include <string>
-#include <map>
-#include <list> 
-#include <vector>
 
-using std::string;
+#include <stdint.h> // uint64_t
 
-namespace DRAMSim 
+#ifndef _DRAMSIM_CALLBACK_H_
+#define _DRAMSIM_CALLBACK_H_
+
+namespace DRAMSim
 {
 
-	typedef std::map<std::string, std::string> OptionsMap;
-	typedef std::list<std::string> OptionsFailedToSet; 
+template <typename ReturnT, typename Param1T, typename Param2T,
+typename Param3T>
+class CallbackBase
+{
+public:
+	virtual ~CallbackBase() = 0;
+	virtual ReturnT operator()(Param1T, Param2T, Param3T) = 0;
+};
 
-	class CSVWriter; 
-	class DRAMSimInterface {
-		public: 
-			virtual uint64_t getCycle() = 0;
-			virtual bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelId=100, unsigned coreID=0) =0; 
-			virtual bool addTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelIdx=100, unsigned coreID=0) = 0;
-			virtual void update()=0;
+template <typename Return, typename Param1T, typename Param2T, typename Param3T>
+DRAMSim::CallbackBase<Return,Param1T,Param2T,Param3T>::~CallbackBase() {}
 
-			virtual void setCPUClockSpeed(uint64_t cpuClkFreqHz) = 0;
-			virtual void simulationDone() = 0;
-			virtual float getUpdateClockPeriod()=0;
-			virtual void dumpStats(CSVWriter &CSVOut)=0;
+template <typename ConsumerT, typename ReturnT,
+typename Param1T, typename Param2T, typename Param3T >
+class Callback: public CallbackBase<ReturnT,Param1T,Param2T,Param3T>
+{
+private:
+	typedef ReturnT (ConsumerT::*PtrMember)(Param1T,Param2T,Param3T);
 
-			virtual void registerCallbacks(
-				TransactionCompleteCB *readDone,
-				TransactionCompleteCB *writeDone,
-				void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower)) = 0 ;
-			virtual std::vector<uint64_t> returnDimensions() = 0;
-	};
-	DRAMSimInterface *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, CSVWriter &csvOut_, const OptionsMap *paramOverrides=NULL);
-}
+public:
+	Callback( ConsumerT* const object, PtrMember member) :
+			object(object), member(member)
+	{
+	}
+
+	Callback( const Callback<ConsumerT,ReturnT,Param1T,Param2T,Param3T>& e ) :
+			object(e.object), member(e.member)
+	{
+	}
+
+	ReturnT operator()(Param1T param1, Param2T param2, Param3T param3)
+	{
+		return (const_cast<ConsumerT*>(object)->*member)
+		       (param1,param2,param3);
+	}
+
+private:
+
+	ConsumerT* const object;
+	const PtrMember  member;
+};
+
+typedef CallbackBase <void, unsigned, uint64_t, uint64_t> TransactionCompleteCB;
+typedef CallbackBase <void,unsigned,uint64_t,uint64_t> Callback_t;
+} // namespace DRAMSim
 
 #endif

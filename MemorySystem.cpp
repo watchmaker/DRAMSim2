@@ -112,9 +112,12 @@ MemorySystem::MemorySystem(unsigned id, unsigned int megsOfMemory, Config &cfg_,
 	unsigned long megsOfStoragePerRank = ((((long long)cfg.NUM_ROWS * (cfg.NUM_COLS * cfg.DEVICE_WIDTH) * cfg.NUM_BANKS) * ((long long)cfg.JEDEC_DATA_BUS_BITS / cfg.DEVICE_WIDTH)) / 8UL) >> 20UL;
 
 	// If this is set, effectively override the number of ranks
+	cout << "megsOfMemory is " << megsOfMemory << "\n";
+	cout << "megsOfStoragePerRank is " << megsOfStoragePerRank << "\n";
 	if (megsOfMemory != 0)
 	{
 		cfg.NUM_RANKS = megsOfMemory / megsOfStoragePerRank;
+		cout << "NUM_RANKS are " << cfg.NUM_RANKS << "\n";
 		if (cfg.NUM_RANKS == 0)
 		{
 			PRINT("WARNING: Cannot create memory system with "<<megsOfMemory<<"MB, defaulting to minimum size of "<<megsOfStoragePerRank<<"MB");

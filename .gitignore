@@ -9,3 +9,6 @@
 *.lo
 DRAMSim
 libdramsim.so
+out
+test_csv
+*.csv

@@ -28,49 +28,54 @@
 *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *********************************************************************************/
 
+#ifndef BUSPACKET_H
+#define BUSPACKET_H
+//BusPacket.h
+//
+//Header file for bus packet object
+//
 
-#ifndef DRAMSIM_H
-#define DRAMSIM_H
-/*
- * This is a public header for DRAMSim including this along with libdramsim.so should
- * provide all necessary functionality to talk to an external simulator
- */
-#include "Callback.h"
-#include "CSVWriter.h"
-#include <stdio.h> 
-#include <string>
-#include <map>
-#include <list> 
-#include <vector>
+#include "SystemConfiguration.h"
 
-using std::string;
-
-namespace DRAMSim 
+namespace DRAMSim
 {
+enum BusPacketType
+{
+	READ,
+	READ_P,
+	WRITE,
+	WRITE_P,
+	ACTIVATE,
+	PRECHARGE,
+	REFRESH,
+	DATA
+};
 
-	typedef std::map<std::string, std::string> OptionsMap;
-	typedef std::list<std::string> OptionsFailedToSet; 
+class Config; 
+class BusPacket
+{
+	BusPacket();
+	ostream &dramsim_log; 
+	Config &cfg; 
+public:
+	//Fields
+	BusPacketType busPacketType;
+	unsigned column;
+	unsigned row;
+	unsigned bank;
+	unsigned rank;
+	uint64_t physicalAddress;
+	void *data;
 
-	class CSVWriter; 
-	class DRAMSimInterface {
-		public: 
-			virtual uint64_t getCycle() = 0;
-			virtual bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelId=100, unsigned coreID=0) =0; 
-			virtual bool addTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelIdx=100, unsigned coreID=0) = 0;
-			virtual void update()=0;
+	//Functions
+	BusPacket(BusPacketType packtype, uint64_t physicalAddr, unsigned col, unsigned rw, unsigned r, unsigned b, void *dat, ostream &dramsim_log_, Config &cfg);
 
-			virtual void setCPUClockSpeed(uint64_t cpuClkFreqHz) = 0;
-			virtual void simulationDone() = 0;
-			virtual float getUpdateClockPeriod()=0;
-			virtual void dumpStats(CSVWriter &CSVOut)=0;
+	void print();
+	void print(uint64_t currentClockCycle, bool dataStart);
+	void printData() const;
 
-			virtual void registerCallbacks(
-				TransactionCompleteCB *readDone,
-				TransactionCompleteCB *writeDone,
-				void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower)) = 0 ;
-			virtual std::vector<uint64_t> returnDimensions() = 0;
-	};
-	DRAMSimInterface *getMemorySystemInstance(const string &dev, const string &sys, const string &pwd, const string &trc, unsigned megsOfMemory, CSVWriter &csvOut_, const OptionsMap *paramOverrides=NULL);
+};
 }
 
 #endif
+
