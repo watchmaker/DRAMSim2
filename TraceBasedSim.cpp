@@ -803,10 +803,11 @@ int main(int argc, char **argv)
 			{"visfile", required_argument, 0, 'v'},
 			{"keep_simple", no_argument, 0, 'k'},
 			{"end_trans", required_argument, 0, 'e'},
+			{"speedup", required_argument, 0, 'u'},
 			{0, 0, 0, 0}
 		};
 		int option_index=0; //for getopt
-		c = getopt_long (argc, argv, "t:s:c:d:o:p:S:v:e:qkn", long_options, &option_index);
+		c = getopt_long (argc, argv, "t:s:c:d:o:p:S:v:e:u:qkn", long_options, &option_index);
 		if (c == -1)
 		{
 			break;
@@ -867,6 +868,11 @@ int main(int argc, char **argv)
 		case 'e':
 			ss << optarg;
 			ss >> MAX_TRANS;
+			ss.clear();
+			break;
+		case 'u':
+			ss << optarg;
+			ss >> speedup_factor;
 			ss.clear();
 			break;
 		case '?':

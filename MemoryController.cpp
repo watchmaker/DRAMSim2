@@ -86,6 +86,7 @@ MemoryController::MemoryController(MemorySystem *parent, CSVWriter &csvOut_, ost
 	refreshEnergy = vector <uint64_t> (cfg.NUM_RANKS,0);
 
 	totalEpochLatency = vector<uint64_t> (cfg.NUM_RANKS*cfg.NUM_BANKS,0);
+	epochAverageLatency = 0;
 
 	//staggers when each rank is due for a refresh
 	for (size_t i=0;i<cfg.NUM_RANKS;i++)
@@ -808,6 +809,7 @@ void MemoryController::printStats(bool finalStats)
 	vector<double> bandwidth = vector<double>(cfg.NUM_RANKS*cfg.NUM_BANKS,0.0);
 
 	double totalBandwidth=0.0;
+	uint64_t totalReads=0;
 	for (size_t i=0;i<cfg.NUM_RANKS;i++)
 	{
 		for (size_t j=0; j<cfg.NUM_BANKS; j++)
@@ -818,6 +820,7 @@ void MemoryController::printStats(bool finalStats)
 			totalReadsPerRank[i] += totalReadsPerBank[SEQUENTIAL(i,j)];
 			totalWritesPerRank[i] += totalWritesPerBank[SEQUENTIAL(i,j)];
 		}
+		totalReads += totalReadsPerRank[i];
 	}
 #ifdef LOG_OUTPUT
 	dramsim_log.precision(3);
@@ -845,6 +848,8 @@ void MemoryController::printStats(bool finalStats)
 		{
 			PRINT( "        -Bandwidth / Latency  (Bank " <<j<<"): " <<bandwidth[SEQUENTIAL(r,j)] << " GB/s\t\t" <<averageLatency[SEQUENTIAL(r,j)] << " ns");
 		}
+		PRINT( "     -Latency Sum  : " << (epochAverageLatency * cfg.tCK));
+		PRINT( "     -Latency Average : " << (((float)epochAverageLatency / (float)totalReads) * cfg.tCK));
 
 		// factor of 1000 at the end is to account for the fact that totalEnergy is accumulated in mJ since IDD values are given in mA
 		backgroundPower[r] = ((double)backgroundEnergy[r] / (double)(cyclesElapsed)) * cfg.Vdd / 1000.0;
@@ -983,6 +988,7 @@ MemoryController::~MemoryController()
 void MemoryController::insertHistogram(unsigned latencyValue, unsigned rank, unsigned bank)
 {
 	totalEpochLatency[SEQUENTIAL(rank,bank)] += latencyValue;
+	epochAverageLatency += latencyValue;
 	//poor man's way to bin things.
 	latencies[(latencyValue/cfg.LATENCY_HISTOGRAM_BIN_SIZE)*cfg.LATENCY_HISTOGRAM_BIN_SIZE]++;
 }

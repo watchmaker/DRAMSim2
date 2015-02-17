@@ -1,13 +1,13 @@
 ; This is for a micron LPDDR3 part as per the datasheet on Micron's website
 NUM_BANKS=8
 ;NUM_ROWS=65536
-NUM_ROW=4096
+NUM_ROW=131072
 NUM_COLS=2048
-DEVICE_WIDTH=4
+DEVICE_WIDTH=8
 
 ;in nanoseconds
 ;#define REFRESH_PERIOD 7800
-REFRESH_PERIOD=7800
+REFRESH_PERIOD=780000
 tCK=1.25 ;*
 ;tCK=5 ;*
 
@@ -19,16 +19,16 @@ AL=0 ;*
 BL=8;*
 tRAS=34;* 
 tRCD=15 ;*
-tRRD=8 ;*
+tRRD=1 ;*
 tRC=51 ;*
 tRP=17 ;*
 tCCD=2 ;*
-tRTP=6 ;*
-tWTR=6 ;*
-tWR=12 ;*
+tRTP=1 ;*
+tWTR=1 ;*
+tWR=1 ;*
 tRTRS=1; -- RANK PARAMETER, TODO 
 tRFC=168;*
-tFAW=40;*
+tFAW=1;*
 tCKE=3 ;*
 tXP=2  ;*
 

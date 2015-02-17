@@ -117,6 +117,7 @@ private:
 
 
 	vector< uint64_t > totalEpochLatency;
+	uint64_t epochAverageLatency;
 
 	unsigned refreshRank;
 	

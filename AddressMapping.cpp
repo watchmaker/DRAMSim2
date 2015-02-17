@@ -297,7 +297,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 
 	}
 	else if (cfg.addressMappingScheme == Scheme8)
-	{
+	  {
 		//col:row:bank:rank:chan
 		tempA = physicalAddress;
 		physicalAddress = physicalAddress >> channelBitWidth;
