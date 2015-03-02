@@ -372,6 +372,13 @@ bool MultiChannelMemorySystem::willAcceptTransaction(bool isWrite, uint64_t addr
 	return channels[chan]->WillAcceptTransaction(); 
 }
 
+bool MultiChannelMemorySystem::willAcceptTransaction(uint64_t addr)
+{
+	unsigned chan, rank,bank,row,col; 
+	addressMapping(addr, chan, rank, bank, row, col,cfg); 
+	return channels[chan]->WillAcceptTransaction();
+}
+
 bool MultiChannelMemorySystem::willAcceptTransaction()
 {
 	for (size_t c=0; c<cfg.NUM_CHANS; c++) {

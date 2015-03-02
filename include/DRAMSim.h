@@ -56,6 +56,8 @@ namespace DRAMSim
 		public: 
 			virtual uint64_t getCycle() = 0;
 			virtual bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelId=100, unsigned coreID=0) =0; 
+			virtual bool willAcceptTransaction(uint64_t addr) =0;
+			virtual bool willAcceptTransaction() =0;
 			virtual bool addTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned channelIdx=100, unsigned coreID=0) = 0;
 			virtual void update()=0;
 
