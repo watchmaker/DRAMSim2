@@ -383,7 +383,14 @@ bool MultiChannelMemorySystem::willAcceptTransaction()
 	return true; 
 }
 
-
+void MultiChannelMemorySystem::printStats() {
+	for (size_t i=0; i<cfg.NUM_CHANS; i++)
+	{
+		PRINT("==== Channel ["<<i<<"] ====");
+		channels[i]->printStats(true); 
+		PRINT("//// Channel ["<<i<<"] ////");
+	}
+}
 
 void MultiChannelMemorySystem::printStats(bool finalStats) {
 
@@ -400,6 +407,7 @@ void MultiChannelMemorySystem::printStats(bool finalStats) {
 	//csvOut.finalize();
 
 }
+
 void MultiChannelMemorySystem::registerCallbacks( 
 		TransactionCompleteCB *readDone,
 		TransactionCompleteCB *writeDone,

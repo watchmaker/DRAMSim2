@@ -54,6 +54,7 @@ class MultiChannelMemorySystem : public DRAMSimInterface, public SimulatorObject
 			bool willAcceptTransaction(bool isWrite, uint64_t addr, unsigned requestSize=64, unsigned linkIdx=100, unsigned coreID=0); 
 			bool willAcceptTransaction(); 
 			void update();
+			void printStats();
 			void printStats(bool finalStats=false);
 			ostream &getLogFile();
 			void simulationDone();
