@@ -66,6 +66,7 @@ namespace DRAMSim
 			virtual float getUpdateClockPeriod()=0;
 			virtual void dumpStats(CSVWriter &CSVOut)=0;
 			virtual void printStats(bool finalStats=false)=0;
+			virtual void printStats()=0;
 
 			virtual void registerCallbacks(
 				TransactionCompleteCB *readDone,
