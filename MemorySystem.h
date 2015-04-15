@@ -42,6 +42,7 @@
 #include <vector>
 #include "Callback.h"
 #include "SimulatorObject.h"
+#include "MemoryController.h"
 
 using std::ostream; 
 using std::deque; 
@@ -53,43 +54,28 @@ class Config;
 class CSVWriter; 
 class Rank; 
 class Transaction; 
-class MemoryController;
 
-typedef void (*powerCallBack_t)(double bgpower, double burstpower, double refreshpower, double actprepower);
 
 class MemorySystem : public SimulatorObject
 {
 public:
 	//functions
-	MemorySystem(unsigned id, unsigned megsOfMemory, Config &cfg_, CSVWriter &csvOut_, ostream &dramsim_log_);
+	MemorySystem(unsigned id, unsigned megsOfMemory, const Config &cfg_, ostream &dramsim_log_);
 	virtual ~MemorySystem();
 	void update();
 	bool addTransaction(Transaction *trans);
 	bool addTransaction(bool isWrite, uint64_t addr);
-	void printStats(bool finalStats);
+	void printStats(CSVWriter *CSVOut, bool finalStats);
 	bool WillAcceptTransaction();
-	void RegisterCallbacks(
-	    Callback_t *readDone,
-	    Callback_t *writeDone,
-	    void (*reportPower)(double bgpower, double burstpower, double refreshpower, double actprepower));
+	void registerCallbacks( TransactionCompleteCB *readDone, TransactionCompleteCB *writeDone, PowerCallback_t *powerCB);
 
 	//fields
-	Config &cfg; 
+	const Config &cfg; 
 	ostream &dramsim_log;
-	MemoryController *memoryController;
+	MemoryController memoryController;
 	vector<Rank *> *ranks;
 	deque<Transaction *> pendingTransactions; 
-
-
-	//function pointers
-	Callback_t* ReturnReadData;
-	Callback_t* WriteDataDone;
-	//TODO: make this a functor as well?
-	static powerCallBack_t ReportPower;
 	unsigned systemID;
-
-private:
-	CSVWriter &csvOut;
 };
 }
 

@@ -44,26 +44,12 @@ using std::dec;
 
 namespace DRAMSim {
 
-Transaction::Transaction(TransactionType transType, uint64_t addr, void *dat, Config &cfg_) :
-	cfg(cfg_),
+Transaction::Transaction(TransactionType transType, uint64_t addr, void *dat) :
 	transactionType(transType),
 	address(addr),
 	data(dat)
 {}
 
-Transaction::Transaction(const Transaction &t)
-	: cfg(t.cfg)
-	  , transactionType(t.transactionType)
-	  , address(t.address)
-	  , data(NULL)
-	  , timeAdded(t.timeAdded)
-	  , timeReturned(t.timeReturned)
-{
-	#ifndef NO_STORAGE
-	ERROR("Data storage is really outdated and these copies happen in an \n improper way, which will eventually cause problems. Please send an \n email to dramninjas [at] gmail [dot] com if you need data storage");
-	abort(); 
-	#endif
-}
 
 ostream &operator<<(ostream &os, const Transaction &t)
 {
@@ -82,16 +68,16 @@ ostream &operator<<(ostream &os, const Transaction &t)
 	return os; 
 }
 
-BusPacketType Transaction::getBusPacketType()
+BusPacketType Transaction::getBusPacketType(const Config &cfg) const
 {
 	switch (transactionType)
 	{
 		case DATA_READ:
-			if (cfg.rowBufferPolicy == ClosePage)
+			if (cfg.ROW_BUFFER_POLICY == ClosePage)
 			{
 				return READ_P;
 			}
-			else if (cfg.rowBufferPolicy == OpenPage)
+			else if (cfg.ROW_BUFFER_POLICY == OpenPage)
 			{
 				return READ; 
 			}
@@ -102,11 +88,11 @@ BusPacketType Transaction::getBusPacketType()
 			}
 			break;
 		case DATA_WRITE:
-			if (cfg.rowBufferPolicy == ClosePage)
+			if (cfg.ROW_BUFFER_POLICY == ClosePage)
 			{
 				return WRITE_P;
 			}
-			else if (cfg.rowBufferPolicy == OpenPage)
+			else if (cfg.ROW_BUFFER_POLICY == OpenPage)
 			{
 				return WRITE; 
 			}

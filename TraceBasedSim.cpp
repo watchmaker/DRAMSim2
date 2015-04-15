@@ -40,15 +40,21 @@
 #include <sstream>
 #include <getopt.h>
 #include <map>
-#include <list>
+#include <deque>
 
+#include "DRAMSim.h"
 #include "SystemConfiguration.h"
 #include "MemorySystem.h"
 #include "MultiChannelMemorySystem.h"
 #include "Transaction.h"
+#include "ConfigIniReader.h"
 #include "IniReader.h"
-#include "CSVWriter.h"
 #include "util.h"
+#include "CSVWriter.h"
+#include <assert.h>
+#ifdef HAS_GPERF 
+#include <google/profiler.h>
+#endif 
 
 enum TraceType
 {
@@ -89,8 +95,8 @@ uint64_t CLOCK_DELAY = 1000000;
 class TransactionReceiver
 {
 	private: 
-		map<uint64_t, list<uint64_t> > pendingReadRequests; 
-		map<uint64_t, list<uint64_t> > pendingWriteRequests; 
+		map<uint64_t, deque<uint64_t> > pendingReadRequests; 
+		map<uint64_t, deque<uint64_t> > pendingWriteRequests; 
 		unsigned numReads, numWrites; 
 	
 	public: 
@@ -99,28 +105,25 @@ class TransactionReceiver
 
 
 		}
-		void add_pending(const Transaction &t, uint64_t cycle)
+
+		void add_pending(bool isWrite, uint64_t address, uint64_t cycle)
 		{
-			// C++ lists are ordered, so the list will always push to the back and
+			//DEBUG("Adding "<<std::hex<<address<<" on cycle "<<std::dec<<cycle<<"\n");
+			// C++ deques are ordered, so the deque will always push to the back and
 			// remove at the front to ensure ordering
-			if (t.transactionType == DATA_READ)
+			if (isWrite)
 			{
-				pendingReadRequests[t.address].push_back(cycle); 
+				pendingWriteRequests[address].push_back(cycle); 
 			}
-			else if (t.transactionType == DATA_WRITE)
+			else 
 			{
-				pendingWriteRequests[t.address].push_back(cycle); 
-			}
-			else
-			{
-				ERROR("This should never happen"); 
-				exit(-1);
+				pendingReadRequests[address].push_back(cycle); 
 			}
 		}
 
 		void read_complete(unsigned id, uint64_t address, uint64_t done_cycle)
 		{
-			map<uint64_t, list<uint64_t> >::iterator it;
+			map<uint64_t, deque<uint64_t> >::iterator it;
 			it = pendingReadRequests.find(address); 
 			if (it == pendingReadRequests.end())
 			{
@@ -153,7 +156,7 @@ class TransactionReceiver
 
 		void write_complete(unsigned id, uint64_t address, uint64_t done_cycle)
 		{
-			map<uint64_t, list<uint64_t> >::iterator it;
+			map<uint64_t, deque<uint64_t> >::iterator it;
 			it = pendingWriteRequests.find(address); 
 			if (it == pendingWriteRequests.end())
 			{
@@ -183,7 +186,13 @@ class TransactionReceiver
 			}
 			//cout << "Write Callback: #"<<numWrites<<" 0x"<< std::hex << address << std::dec << " latency="<<latency<<"cycles ("<< done_cycle<< "->"<<added_cycle<<")"<<endl;
 		}
+		void simulationDone(uint64_t cycles) {
+			DEBUG("Transaction receiver got back "<<numReads<<" reads and "<<numWrites<<" writes in "<<cycles<<" cycles\n");
+		}
 };
+
+TransactionReceiver transactionReceiver; 
+
 #endif
 
 void usage()
@@ -200,10 +209,13 @@ void usage()
 	cout << "\t-S, --size=# \t\t\tSize of the memory system in megabytes [default=2048M]"<<endl;
 	cout << "\t-n, --notiming \t\t\tDo not use the clock cycle information in the trace file"<<endl;
 	cout << "\t-v, --visfile \t\t\tVis output filename"<<endl;
+#if HAS_GPERF
+	cout << "\t-P, --profiler \t\t\tEnable gperf profiling"<<endl;
+#endif
 }
 #endif
 
-void *parseTraceFileLine(string &line, uint64_t &addr, enum TransactionType &transType, uint64_t &clockCycle, TraceType type, bool useClockCycle)
+void *parseTraceFileLine(const string &line, uint64_t &addr, enum TransactionType &transType, uint64_t &clockCycle, TraceType type, bool useClockCycle)
 {
 	size_t previousIndex=0;
 	size_t spaceIndex=0;
@@ -374,17 +386,6 @@ void *parseTraceFileLine(string &line, uint64_t &addr, enum TransactionType &tra
 
 #ifndef _SIM_
 
-void alignTransactionAddress(Transaction &trans)
-{
-	Config &cfg = trans.cfg; 
-	// zero out the low order bits which correspond to the size of a transaction
-
-	unsigned throwAwayBits = dramsim_log2((cfg.BL*cfg.JEDEC_DATA_BUS_BITS/8));
-
-	trans.address >>= throwAwayBits;
-	trans.address <<= throwAwayBits;
-}
-
 /** 
  * Override options can be specified on the command line as -o key1=value1,key2=value2
  * this method should parse the key-value pairs and put them into a map 
@@ -418,11 +419,32 @@ OptionsMap parseParamOverrides(const string &kv_str)
 	return kv_map; 
 }
 
+bool parseLineAndTryAdd(const string &line, TraceType traceType, DRAMSimInterface *memorySystem, uint64_t currentClockCycle, bool useClockCycle) {
+	DRAMSimTransaction *trans=NULL;
+	uint64_t addr=0;
+	uint64_t clockCycle=0;
+	enum TransactionType transType;
+
+	//DEBUG("LINE='"<<line<<"'\n");
+	parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
+	bool isWrite = (transType == DATA_WRITE);
+	trans = memorySystem->makeTransaction(isWrite, addr); 
+
+	if (trans && currentClockCycle >= clockCycle)
+	{
+		bool accepted = memorySystem->addTransaction(trans);
+		assert(accepted);
+#ifdef RETURN_TRANSACTIONS
+		transactionReceiver.add_pending(isWrite, addr, currentClockCycle); 
+#endif
+		return true; 
+	}
+	return false;
+}
+
 void old_TBS(string traceFileName, string systemIniFilename, string deviceIniFilename, string pwdString, 
 	     string visFilename, unsigned megsOfMemory, bool useClockCycle, OptionsMap paramOverrides, unsigned numCycles)
 {
-	 
-
 	// get the trace filename
 	string temp = traceFileName.substr(traceFileName.find_last_of("/")+1);
 
@@ -459,40 +481,45 @@ void old_TBS(string traceFileName, string systemIniFilename, string deviceIniFil
 
 	//ignore the pwd argument if the argument is an absolute path
 	if (pwdString.length() > 0 && traceFileName[0] != '/')
-	{
 		traceFileName = pwdString + "/" +traceFileName;
-	}
-
+	
+	
 	DEBUG("== Loading trace file '"<<traceFileName<<"' == ");
 
 	ifstream traceFile;
 	string line;
 
+		vector<std::string> iniFiles;
+	iniFiles.push_back(deviceIniFilename); 
+	iniFiles.push_back(systemIniFilename);
 
-	CSVWriter &CSVOut = CSVWriter::GetCSVWriterInstance(visFilename); 
-	MultiChannelMemorySystem *memorySystem = new MultiChannelMemorySystem(deviceIniFilename, systemIniFilename, pwdString, traceFileName, megsOfMemory, CSVOut, &paramOverrides);
+	ostringstream oss; 
+	oss << megsOfMemory; 
+
+	paramOverrides["megsOfMemory"] = oss.str(); 
+	DRAMSimInterface *memorySystem = getMemorySystemInstance(iniFiles, "", &paramOverrides);
+
 	// set the frequency ratio to 1:1
 	memorySystem->setCPUClockSpeed(0);
-	Config &cfg = memorySystem->cfg;
 
 
 #ifdef RETURN_TRANSACTIONS
 	TransactionReceiver transactionReceiver; 
 	/* create and register our callback functions */
-	Callback_t *read_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::read_complete);
-	Callback_t *write_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::write_complete);
+	TransactionCompleteCB *read_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::read_complete);
+	TransactionCompleteCB *write_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::write_complete);
 	memorySystem->registerCallbacks(read_cb, write_cb, NULL);
 #endif
 
+#if HAS_GPERF
+	if (enableCPUprofiler) {
+		static const char *gperf_filename = "DRAMSim.gperf.prof";
+		ProfilerStart(gperf_filename);
+	}
+#endif
 
-	uint64_t addr;
-	uint64_t clockCycle=0;
-	enum TransactionType transType;
-
-	void *data = NULL;
 	int lineNumber = 0;
-	Transaction *trans=NULL;
-	bool pendingTrans = false;
+	bool lastTransactionSucceeded=true;
 
 	traceFile.open(traceFileName.c_str());
 
@@ -501,75 +528,45 @@ void old_TBS(string traceFileName, string systemIniFilename, string deviceIniFil
 		cout << "== Error - Could not open trace file"<<endl;
 		exit(0);
 	}
+	
 	for (size_t i=0;i<numCycles;i++)
 	{
-		if (!pendingTrans)
-		{
-			if (!traceFile.eof())
-			{
+		// if the last transaction failed, try to re-add the previous line
+		if (!lastTransactionSucceeded) {
+			lastTransactionSucceeded = parseLineAndTryAdd(line, traceType,  memorySystem, i, useClockCycle);
+		}
+		// otherwise, grab the next line from the trace and try to send it
+		else {
+			while (true) {
 				getline(traceFile, line);
-
-				if (line.size() > 0)
-				{
-					data = parseTraceFileLine(line, addr, transType,clockCycle, traceType,useClockCycle);
-					trans = new Transaction(transType, addr, data, cfg);
-					alignTransactionAddress(*trans); 
-
-					if (i>=clockCycle)
-					{
-						if (!memorySystem->addTransaction(trans))
-						{
-							pendingTrans = true;
-						}
-						else
-						{
-#ifdef RETURN_TRANSACTIONS
-							transactionReceiver.add_pending(*trans, i); 
-#endif
-							// the memory system accepted our request so now it takes ownership of it
-							trans = NULL; 
-						}
-					}
-					else
-					{
-						pendingTrans = true;
-					}
-				}
-				else
-				{
-					DEBUG("WARNING: Skipping line "<<lineNumber<< " ('" << line << "') in tracefile");
+				if (traceFile.eof()) {
+					// we can't break because there's nothing to add, so use an 'evil' goto to jump out of this loop 
+					goto updateAndContinue;
 				}
 				lineNumber++;
+				if (line.length() == 0) {
+					DEBUG("Skipping blank line "<<lineNumber<<"\n");
+					continue;
+				} else {
+					break;
+				}
 			}
-			else
-			{
-				//we're out of trace, set pending=false and let the thing spin without adding transactions
-				pendingTrans = false; 
-			}
+			lastTransactionSucceeded = parseLineAndTryAdd(line, traceType, memorySystem, i, useClockCycle);
 		}
-
-		else if (pendingTrans && i >= clockCycle)
-		{
-			pendingTrans = !memorySystem->addTransaction(trans);
-			if (!pendingTrans)
-			{
-#ifdef RETURN_TRANSACTIONS
-				transactionReceiver.add_pending(*trans, i); 
-#endif
-				trans=NULL;
-			}
-		}
+updateAndContinue:
 		memorySystem->update();
-	}
+	} // end main loop 
 
 	traceFile.close();
-	memorySystem->printStats(true);
-	// make valgrind happy
-	if (trans)
-	{
-		delete trans;
+	memorySystem->simulationDone();
+#ifdef HAS_GPERF
+	if (enableCPUprofiler) {
+		ProfilerStop();
 	}
-	delete(memorySystem);
+#endif 
+#ifdef RETURN_TRANSACTIONS
+	transactionReceiver.simulationDone(numCycles);
+#endif
 }
 
 void simple_TBS(string traceFileName, string systemIniFilename, string deviceIniFilename, string pwdString, 
@@ -585,23 +582,28 @@ void simple_TBS(string traceFileName, string systemIniFilename, string deviceIni
 
 	DEBUG("== Loading trace file '"<<traceFileName<<"' == ");
 
-	CSVWriter &CSVOut = CSVWriter::GetCSVWriterInstance(visFilename); 
-	MultiChannelMemorySystem *memorySystem = new MultiChannelMemorySystem(deviceIniFilename, systemIniFilename, pwdString, traceFileName, megsOfMemory, CSVOut, &paramOverrides);
+	vector<std::string> iniFiles;
+	iniFiles.push_back(deviceIniFilename); 
+	iniFiles.push_back(systemIniFilename);
+
+	ostringstream oss; 
+	oss << megsOfMemory; 
+
+	paramOverrides["megsOfMemory"] = oss.str(); 
+	DRAMSimInterface *memorySystem = getMemorySystemInstance(iniFiles, "", &paramOverrides);
 	// set the frequency ratio to 1:1
 	memorySystem->setCPUClockSpeed(0); 
-	Config &cfg = memorySystem->cfg;
 
 
 #ifdef RETURN_TRANSACTIONS
 	TransactionReceiver transactionReceiver; 
 	/* create and register our callback functions */
-	Callback_t *read_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::read_complete);
-	Callback_t *write_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::write_complete);
+	TransactionCompleteCB *read_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::read_complete);
+	TransactionCompleteCB *write_cb = new Callback<TransactionReceiver, void, unsigned, uint64_t, uint64_t>(&transactionReceiver, &TransactionReceiver::write_complete);
 	memorySystem->registerCallbacks(read_cb, write_cb, NULL);
 #endif
 
-	void *data = NULL;
-	Transaction *trans=NULL;
+	DRAMSimTransaction *trans=NULL;
 	enum TransactionType transType;
 	// Open input file
 	ifstream inFile;
@@ -634,6 +636,7 @@ void simple_TBS(string traceFileName, string systemIniFilename, string deviceIni
 	done = false;
 	bool paused = false;
 	bool write = 0;
+	uint64_t addr = 0;
 
 	while (inFile.good() && !done)
 	{
@@ -691,7 +694,7 @@ void simple_TBS(string traceFileName, string systemIniFilename, string deviceIni
 				transType = DATA_READ;
 			else
 				transType = DATA_WRITE;
-			uint64_t addr = line_vals[2];
+			addr = line_vals[2];
 
 			// increment the counter until >= the clock cycle of cur transaction
 			// for each cycle, call the update() function.
@@ -700,8 +703,7 @@ void simple_TBS(string traceFileName, string systemIniFilename, string deviceIni
 				memorySystem->update();
 				trace_cycles++;
 			}
-			trans = new Transaction(transType, addr, data, cfg);
-			alignTransactionAddress(*trans); 
+			trans = memorySystem->makeTransaction(write, addr);
 		}
 
 		// add the transaction and continue
@@ -709,7 +711,7 @@ void simple_TBS(string traceFileName, string systemIniFilename, string deviceIni
 		{		
 			//memorySystem->addTransaction(write, addr);
 #ifdef RETURN_TRANSACTIONS
-				transactionReceiver.add_pending(*trans, trace_cycles); 
+			transactionReceiver.add_pending(write, addr, trace_cycles); 
 #endif
 			pending++;
 			trans_count++;

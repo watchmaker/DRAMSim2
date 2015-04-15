@@ -9,9 +9,9 @@
 
 // Default System.ini parameters 
 
-// These will be reset by the code 
+// see the initialization code in ConfigIniReader::finalize() and in TraceBasedSim for how these are handled 
 PARAM(unsigned, NUM_RANKS, 0)
-PARAM(unsigned, NUM_DEVICES, 0)
+PARAM(unsigned, megsOfMemory, 4096)
 
 PARAM(unsigned,NUM_CHANS,2) // number of *logically independent* channels (i.e. each with a separate memory controller); should be a power of 2
 PARAM(unsigned,JEDEC_DATA_BUS_BITS,64) // Always 64 for DDRx; if you want multiple *ganged* channels, set this to N*64
@@ -19,10 +19,10 @@ PARAM(unsigned,TRANS_QUEUE_DEPTH,64) // transaction queue, i.e., CPU-level comma
 PARAM(unsigned,CMD_QUEUE_DEPTH,64) // command queue, i.e., DRAM-level commands such as: CAS 544, RAS 4
 PARAM(unsigned,EPOCH_LENGTH,100000) // length of an epoch in cycles (granularity of simulation stats)
 
-PARAM(DRAMSim::RowBufferPolicy,rowBufferPolicy,ClosePage) // OpenPage or ClosePage
-PARAM(DRAMSim::AddressMappingScheme,addressMappingScheme,Scheme8) //valid Schemes 1-7; For multiple independent channels, use Scheme7 since it has the most parallelism 
-PARAM(DRAMSim::SchedulingPolicy,schedulingPolicy,RankThenBankRoundRobin) // BankThenRankRoundRobin or RankThenBankRoundRobin 
-PARAM(DRAMSim::QueuingStructure,queuingStructure,PerRank) //PerRank or PerRankPerBank
+PARAM(DRAMSim::RowBufferPolicy,ROW_BUFFER_POLICY,ClosePage) // OpenPage or ClosePage
+PARAM(DRAMSim::AddressMappingScheme,ADDRESS_MAPPING_SCHEME,Scheme8) //valid Schemes 1-7; For multiple independent channels, use Scheme7 since it has the most parallelism 
+PARAM(DRAMSim::SchedulingPolicy,SCHEDULING_POLICY,RankThenBankRoundRobin) // BankThenRankRoundRobin or RankThenBankRoundRobin 
+PARAM(DRAMSim::QueuingStructure,QUEUING_STRUCTURE,PerRank) //PerRank or PerRankPerBank
 
 //for true/false, please use all lowercase
 PARAM(bool,DEBUG_TRANS_Q,false)
@@ -44,6 +44,9 @@ PARAM(unsigned,NUM_BANKS,8)
 PARAM(unsigned,NUM_ROWS,16384)
 PARAM(unsigned,NUM_COLS,2048)
 PARAM(unsigned,DEVICE_WIDTH,4)
+
+// For power computation, we need the number of devices per rank 
+PARAM(unsigned, NUM_DEVICES, (JEDEC_DATA_BUS_BITS/DEVICE_WIDTH))
 
 
 //in nanoseconds

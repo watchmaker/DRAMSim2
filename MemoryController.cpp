@@ -45,16 +45,24 @@
 
 using namespace DRAMSim;
 
-MemoryController::MemoryController(MemorySystem *parent, CSVWriter &csvOut_, ostream &dramsim_log_) :
+MemoryController::MemoryController(MemorySystem *parent, ostream &dramsim_log_) :
 		parentMemorySystem(parent),
 		cfg(parent->cfg),
 		lastDumpCycle(0),
 		dramsim_log(dramsim_log_),
 		bankStates(cfg.NUM_RANKS, vector<BankState>(cfg.NUM_BANKS, dramsim_log)),
+		readCB(NULL), 
+		writeCB(NULL),
+		powerCB(NULL), 
 		commandQueue(bankStates, dramsim_log_, cfg),
 		poppedBusPacket(NULL),
-		csvOut(csvOut_),
+		powerDown(cfg.NUM_RANKS,false),
 		totalTransactions(0),
+		grandTotalBankAccesses(cfg.NUM_RANKS*cfg.NUM_BANKS,0),
+		totalReadsPerBank(cfg.NUM_RANKS*cfg.NUM_BANKS,0),
+		totalWritesPerBank(cfg.NUM_RANKS*cfg.NUM_BANKS,0),
+		totalReadsPerRank(cfg.NUM_RANKS,0),
+		totalWritesPerRank(cfg.NUM_RANKS,0),
 		refreshRank(0)
 {
 	//bus related fields
@@ -68,12 +76,6 @@ MemoryController::MemoryController(MemorySystem *parent, CSVWriter &csvOut_, ost
 
 	//reserve memory for vectors
 	transactionQueue.reserve(cfg.TRANS_QUEUE_DEPTH);
-	powerDown = vector<bool>(cfg.NUM_RANKS,false);
-	grandTotalBankAccesses = vector<uint64_t>(cfg.NUM_RANKS*cfg.NUM_BANKS,0);
-	totalReadsPerBank = vector<uint64_t>(cfg.NUM_RANKS*cfg.NUM_BANKS,0);
-	totalWritesPerBank = vector<uint64_t>(cfg.NUM_RANKS*cfg.NUM_BANKS,0);
-	totalReadsPerRank = vector<uint64_t>(cfg.NUM_RANKS,0);
-	totalWritesPerRank = vector<uint64_t>(cfg.NUM_RANKS,0);
 
 	writeDataCountdown.reserve(cfg.NUM_RANKS);
 	writeDataToSend.reserve(cfg.NUM_RANKS);
@@ -112,7 +114,7 @@ void MemoryController::receiveFromBus(BusPacket *bpacket)
 	}
 
 	//add to return read data queue
-	returnTransaction.push_back(new Transaction(RETURN_DATA, bpacket->physicalAddress, bpacket->data, cfg));
+	returnTransaction.push_back(new Transaction(RETURN_DATA, bpacket->physicalAddress, bpacket->data));
 	totalReadsPerBank[SEQUENTIAL(bpacket->rank,bpacket->bank)]++;
 
 	// this delete statement saves a mindboggling amount of memory
@@ -122,9 +124,9 @@ void MemoryController::receiveFromBus(BusPacket *bpacket)
 //sends read data back to the CPU
 void MemoryController::returnReadData(const Transaction *trans)
 {
-	if (parentMemorySystem->ReturnReadData!=NULL)
+	if (readCB != NULL)
 	{
-		(*parentMemorySystem->ReturnReadData)(parentMemorySystem->systemID, trans->address, currentClockCycle);
+		(*readCB)(parentMemorySystem->systemID, trans->address, currentClockCycle);
 	}
 }
 
@@ -194,9 +196,9 @@ void MemoryController::update()
 		if (dataCyclesLeft == 0)
 		{
 			//inform upper levels that a write is done
-			if (parentMemorySystem->WriteDataDone!=NULL)
+			if (writeCB!=NULL)
 			{
-				(*parentMemorySystem->WriteDataDone)(parentMemorySystem->systemID,outgoingDataPacket->physicalAddress, currentClockCycle);
+				(*writeCB)(parentMemorySystem->systemID,outgoingDataPacket->physicalAddress, currentClockCycle);
 			}
 
 			(*ranks)[outgoingDataPacket->rank]->receiveFromBus(outgoingDataPacket);
@@ -273,7 +275,7 @@ void MemoryController::update()
 
 			writeDataToSend.push_back(new BusPacket(DATA, poppedBusPacket->physicalAddress, poppedBusPacket->column,
 			                                    poppedBusPacket->row, poppedBusPacket->rank, poppedBusPacket->bank,
-			                                    poppedBusPacket->data, dramsim_log, cfg));
+			                                    poppedBusPacket->data, dramsim_log));
 			writeDataCountdown.push_back(cfg.WL);
 		}
 
@@ -517,13 +519,13 @@ void MemoryController::update()
 			//create activate command to the row we just translated
 			BusPacket *ACTcommand = new BusPacket(ACTIVATE, transaction->address,
 					newTransactionColumn, newTransactionRow, newTransactionRank,
-					newTransactionBank, 0, dramsim_log,cfg);
+					newTransactionBank, 0, dramsim_log);
 
 			//create read or write command and enqueue it
-			BusPacketType bpType = transaction->getBusPacketType();
+			BusPacketType bpType = transaction->getBusPacketType(cfg);
 			BusPacket *command = new BusPacket(bpType, transaction->address,
 					newTransactionColumn, newTransactionRow, newTransactionRank,
-					newTransactionBank, transaction->data, dramsim_log,cfg);
+					newTransactionBank, transaction->data, dramsim_log);
 
 
 
@@ -786,7 +788,7 @@ void MemoryController::resetStats()
 	}
 }
 //prints statistics at the end of an epoch or  simulation
-void MemoryController::printStats(bool finalStats)
+void MemoryController::printStats(CSVWriter *CSVOut, bool finalStats)
 {
 	unsigned myChannel = parentMemorySystem->systemID;
 
@@ -838,7 +840,6 @@ void MemoryController::printStats(bool finalStats)
 	double totalAggregateBandwidth = 0.0;	
 	for (size_t r=0;r<cfg.NUM_RANKS;r++)
 	{
-
 		PRINT( "      -Rank   "<<r<<" : ");
 		PRINTN( "        -Reads  : " << totalReadsPerRank[r]);
 		PRINT( " ("<<totalReadsPerRank[r] * bytesPerTransaction<<" bytes)");
@@ -858,9 +859,9 @@ void MemoryController::printStats(bool finalStats)
 		actprePower[r] = ((double)actpreEnergy[r] / (double)(cyclesElapsed)) * cfg.Vdd / 1000.0;
 		averagePower[r] = ((backgroundEnergy[r] + burstEnergy[r] + refreshEnergy[r] + actpreEnergy[r]) / (double)cyclesElapsed) * cfg.Vdd / 1000.0;
 
-		if ((*parentMemorySystem->ReportPower)!=NULL)
+		if (powerCB != NULL)
 		{
-			(*parentMemorySystem->ReportPower)(backgroundPower[r],burstPower[r],refreshPower[r],actprePower[r]);
+			(*powerCB)(backgroundPower[r],burstPower[r],refreshPower[r],actprePower[r]);
 		}
 
 		PRINT( " == Power Data for Rank        " << r );
@@ -869,52 +870,61 @@ void MemoryController::printStats(bool finalStats)
 		PRINT( "     -Act/Pre    (watts)     : " << actprePower[r] );
 		PRINT( "     -Burst      (watts)     : " << burstPower[r]);
 		PRINT( "     -Refresh    (watts)     : " << refreshPower[r] );
+		// FIXME: oh man, the manipulations with csvOut are really terrible
 		if (cfg.VIS_FILE_OUTPUT)
 		{
-		//	cout << "c="<<myChannel<< " r="<<r<<"writing to csv out on cycle "<< currentClockCycle<<endl;
+			//	cout << "c="<<myChannel<< " r="<<r<<"writing to csv out on cycle "<< currentClockCycle<<endl;
 			// write the vis file output
 			// just writing the headers
-			csvOut << CSVWriter::IndexedName("Background_Power",myChannel,r) <<backgroundPower[r];
-			csvOut << CSVWriter::IndexedName("ACT_PRE_Power",myChannel,r) << actprePower[r];
-			csvOut << CSVWriter::IndexedName("Burst_Power",myChannel,r) << burstPower[r];
-			csvOut << CSVWriter::IndexedName("Refresh_Power",myChannel,r) << refreshPower[r];
-			double totalRankBandwidth=0.0;
-			for (size_t b=0; b<cfg.NUM_BANKS; b++)
-			{
-				csvOut << CSVWriter::IndexedName("Bandwidth",myChannel,r,b) << bandwidth[SEQUENTIAL(r,b)];
-				csvOut << CSVWriter::IndexedName("Average_Latency",myChannel,r,b) << averageLatency[SEQUENTIAL(r,b)];
+			if (CSVOut) {
+				CSVWriter &csvOut = *CSVOut; 
+				csvOut << CSVWriter::IndexedName("Background_Power",myChannel,r) <<backgroundPower[r];
+				csvOut << CSVWriter::IndexedName("ACT_PRE_Power",myChannel,r) << actprePower[r];
+				csvOut << CSVWriter::IndexedName("Burst_Power",myChannel,r) << burstPower[r];
+				csvOut << CSVWriter::IndexedName("Refresh_Power",myChannel,r) << refreshPower[r];
+				double totalRankBandwidth=0.0;
+				for (size_t b=0; b<cfg.NUM_BANKS; b++)
+				{
+					csvOut << CSVWriter::IndexedName("Bandwidth",myChannel,r,b) << bandwidth[SEQUENTIAL(r,b)];
+					totalRankBandwidth += bandwidth[SEQUENTIAL(r,b)];
+					totalAggregateBandwidth += bandwidth[SEQUENTIAL(r,b)];
+					csvOut << CSVWriter::IndexedName("Average_Latency",myChannel,r,b) << averageLatency[SEQUENTIAL(r,b)];
+				}
+				csvOut << CSVWriter::IndexedName("Rank_Aggregate_Bandwidth",myChannel,r) << totalRankBandwidth; 
+				csvOut << CSVWriter::IndexedName("Rank_Average_Bandwidth",myChannel,r) << totalRankBandwidth/cfg.NUM_RANKS; 
+				//csvOut.finalize();
+				
+				// now writing the values
+				/*csvOut << CSVWriter::IndexedName("Background_Power",myChannel,r) <<backgroundPower[r];
+				  csvOut << CSVWriter::IndexedName("ACT_PRE_Power",myChannel,r) << actprePower[r];
+				  csvOut << CSVWriter::IndexedName("Burst_Power",myChannel,r) << burstPower[r];
+				  csvOut << CSVWriter::IndexedName("Refresh_Power",myChannel,r) << refreshPower[r];
+				  for (size_t b=0; b<cfg.NUM_BANKS; b++)
+				  {
+				  csvOut << CSVWriter::IndexedName("Bandwidth",myChannel,r,b) << bandwidth[SEQUENTIAL(r,b)];
+				  totalRankBandwidth += bandwidth[SEQUENTIAL(r,b)];
+				  totalAggregateBandwidth += bandwidth[SEQUENTIAL(r,b)];
+				  csvOut << CSVWriter::IndexedName("Average_Latency",myChannel,r,b) << averageLatency[SEQUENTIAL(r,b)];
+				  }
+				  csvOut << CSVWriter::IndexedName("Rank_Aggregate_Bandwidth",myChannel,r) << totalRankBandwidth; 
+				  csvOut << CSVWriter::IndexedName("Rank_Average_Bandwidth",myChannel,r) << totalRankBandwidth/cfg.NUM_RANKS; 
+				  csvOut.finalize();*/
 			}
-			csvOut << CSVWriter::IndexedName("Rank_Aggregate_Bandwidth",myChannel,r) << totalRankBandwidth; 
-			csvOut << CSVWriter::IndexedName("Rank_Average_Bandwidth",myChannel,r) << totalRankBandwidth/cfg.NUM_RANKS; 
-			//csvOut.finalize();
-
-			// now writing the values
-			/*csvOut << CSVWriter::IndexedName("Background_Power",myChannel,r) <<backgroundPower[r];
-			csvOut << CSVWriter::IndexedName("ACT_PRE_Power",myChannel,r) << actprePower[r];
-			csvOut << CSVWriter::IndexedName("Burst_Power",myChannel,r) << burstPower[r];
-			csvOut << CSVWriter::IndexedName("Refresh_Power",myChannel,r) << refreshPower[r];
-			for (size_t b=0; b<cfg.NUM_BANKS; b++)
-			{
-				csvOut << CSVWriter::IndexedName("Bandwidth",myChannel,r,b) << bandwidth[SEQUENTIAL(r,b)];
-				totalRankBandwidth += bandwidth[SEQUENTIAL(r,b)];
-				totalAggregateBandwidth += bandwidth[SEQUENTIAL(r,b)];
-				csvOut << CSVWriter::IndexedName("Average_Latency",myChannel,r,b) << averageLatency[SEQUENTIAL(r,b)];
-			}
-			csvOut << CSVWriter::IndexedName("Rank_Aggregate_Bandwidth",myChannel,r) << totalRankBandwidth; 
-			csvOut << CSVWriter::IndexedName("Rank_Average_Bandwidth",myChannel,r) << totalRankBandwidth/cfg.NUM_RANKS; 
-			csvOut.finalize();*/
 		}
 	}
 	if (cfg.VIS_FILE_OUTPUT)
 	{
-		// just writing the headers
-		csvOut << CSVWriter::IndexedName("Aggregate_Bandwidth",myChannel) << totalAggregateBandwidth;
-		csvOut << CSVWriter::IndexedName("Average_Bandwidth",myChannel) << totalAggregateBandwidth / (cfg.NUM_RANKS*cfg.NUM_BANKS);
-		//csvOut.finalize();
-		// now writing the values
-		//csvOut << CSVWriter::IndexedName("Aggregate_Bandwidth",myChannel) << totalAggregateBandwidth;
-		//csvOut << CSVWriter::IndexedName("Average_Bandwidth",myChannel) << totalAggregateBandwidth / (cfg.NUM_RANKS*cfg.NUM_BANKS);
-		//csvOut.finalize();
+		if (CSVOut) {
+			CSVWriter &csvOut = *CSVOut; 
+			
+			csvOut << CSVWriter::IndexedName("Aggregate_Bandwidth",myChannel) << totalAggregateBandwidth;
+			csvOut << CSVWriter::IndexedName("Average_Bandwidth",myChannel) << totalAggregateBandwidth / (cfg.NUM_RANKS*cfg.NUM_BANKS);
+			//csvOut.finalize();
+			// now writing the values
+			//csvOut << CSVWriter::IndexedName("Aggregate_Bandwidth",myChannel) << totalAggregateBandwidth;
+			//csvOut << CSVWriter::IndexedName("Average_Bandwidth",myChannel) << totalAggregateBandwidth / (cfg.NUM_RANKS*cfg.NUM_BANKS);
+			//csvOut.finalize();
+		}
 	}
 
 	// only print the latency histogram at the end of the simulation since it clogs the output too much to print every epoch
@@ -972,6 +982,9 @@ void MemoryController::printStats(bool finalStats)
 }
 MemoryController::~MemoryController()
 {
+	for (size_t i=0; i<ranks->size(); i++) {
+		delete (*ranks)[i];
+	}
 	//ERROR("MEMORY CONTROLLER DESTRUCTOR");
 	//abort();
 	for (size_t i=0; i<pendingReadTransactions.size(); i++)
@@ -983,6 +996,11 @@ MemoryController::~MemoryController()
 		delete returnTransaction[i];
 	}
 
+}
+void MemoryController::registerCallbacks(TransactionCompleteCB *readCB_, TransactionCompleteCB *writeCB_, PowerCallback_t *powerCB_) {
+	readCB = readCB_; 
+	writeCB = writeCB_;
+	powerCB = powerCB_; 
 }
 //inserts a latency into the latency histogram
 void MemoryController::insertHistogram(unsigned latencyValue, unsigned rank, unsigned bank)

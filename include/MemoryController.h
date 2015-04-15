@@ -58,7 +58,7 @@ class MemoryController : public SimulatorObject
 friend class Rank; 
 public:
 	//functions
-	MemoryController(MemorySystem* ms, CSVWriter &csvOut_, ostream &dramsim_log_);
+	MemoryController(MemorySystem* ms, ostream &dramsim_log_);
 	virtual ~MemoryController();
 
 	bool addTransaction(Transaction *trans);
@@ -67,8 +67,9 @@ public:
 	void receiveFromBus(BusPacket *bpacket);
 	void attachRanks(vector<Rank *> *ranks);
 	void update();
-	void printStats(bool finalStats = false);
+	void printStats(CSVWriter *CSVOut, bool finalStats = false);
 	void resetStats(); 
+	void registerCallbacks(TransactionCompleteCB *readCB, TransactionCompleteCB *writeCB, PowerCallback_t *powerCB);
 
 
 	//fields
@@ -78,13 +79,16 @@ private:
 	void insertHistogram(unsigned latencyValue, unsigned rank, unsigned bank);
 
 	MemorySystem *parentMemorySystem;
-	Config &cfg; 
+	const Config &cfg; 
 
 	uint64_t lastDumpCycle; 
 	ostream &dramsim_log;
 	vector< vector <BankState> > bankStates;
 
 	//fields
+	TransactionCompleteCB *readCB;
+	TransactionCompleteCB *writeCB; 
+	PowerCallback_t *powerCB;
 
 	CommandQueue commandQueue;
 	BusPacket *poppedBusPacket;
@@ -98,8 +102,6 @@ private:
 
 	vector<Rank *> *ranks;
 
-	//output file
-	CSVWriter &csvOut; 
 
 	// these packets are counting down waiting to be transmitted on the "bus"
 	BusPacket *outgoingCmdPacket;

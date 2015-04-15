@@ -54,7 +54,6 @@ class Transaction
 	Transaction();
 public:
 	//fields
-	Config &cfg; 
 	TransactionType transactionType;
 	uint64_t address;
 	void *data;
@@ -64,10 +63,14 @@ public:
 
 	friend ostream &operator<<(ostream &os, const Transaction &t);
 	//functions
-	Transaction(TransactionType transType, uint64_t addr, void *data, Config &cfg);
-	Transaction(const Transaction &t);
+	Transaction(TransactionType transType, uint64_t addr, void *data);
 
-	BusPacketType getBusPacketType();
+	BusPacketType getBusPacketType(const Config &cfg) const;
+private:
+	// make non-copyable
+	Transaction(const Transaction &other);
+	Transaction &operator=(const Transaction &other);
+
 };
 
 }

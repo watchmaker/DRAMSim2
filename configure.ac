@@ -1,5 +1,9 @@
-AC_INIT([DRAMSim2], [2.3.0], [dramninjas@gmail.com])
+AC_INIT([DRAMSim2], [2.4.0], [dramninjas@gmail.com])
+AM_INIT_AUTOMAKE([1.9.6 foreign])
 
+LT_INIT([shared])
+AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_HEADERS([config.h])
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CPP
@@ -14,7 +18,23 @@ AC_TYPE_UINT64_T
 # Checks for library functions.
 AC_FUNC_MALLOC
 
+# The old DRAMSim2 used to generate the files to the build directory -- keep that as the default behavior
 AC_PREFIX_DEFAULT($PWD)
 
 AC_CONFIG_FILES([Makefile])
+
+# TODO: add a flag for this and for debug mode 
+CXXFLAGS='-g -O3 -march=native'
+
+# check for google perftools 
+has_gperf=1
+saved_LIBS="$LIBS"
+AC_CHECK_HEADERS([google/profiler.h], [], [has_gperf=0])
+AC_CHECK_LIB([profiler], [ProfilerStart], [], [has_gperf=0])
+AS_IF([test "$has_gperf" = "1"], 
+		[AC_MSG_NOTICE([Found gperf!])
+		 AC_DEFINE([HAS_GPERF], [1], [1 if found gperf library])
+		 ], 
+		 [LIBS="$saved_LIBS"])
+
 AC_OUTPUT

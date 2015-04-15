@@ -34,11 +34,10 @@
 namespace DRAMSim
 {
 
-void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsigned &newTransactionRank, unsigned &newTransactionBank, unsigned &newTransactionRow, unsigned &newTransactionColumn, Config &cfg)
+void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsigned &newTransactionRank, unsigned &newTransactionBank, unsigned &newTransactionRow, unsigned &newTransactionColumn, const Config &cfg)
 {
 	uint64_t tempA, tempB;
 	unsigned transactionSize = (cfg.JEDEC_DATA_BUS_BITS/8)*cfg.BL; 
-	uint64_t transactionMask =  transactionSize - 1; //ex: (64 bit bus width) x (8 Burst Length) - 1 = 64 bytes - 1 = 63 = 0x3f mask
 	unsigned channelBitWidth = dramsim_log2(cfg.NUM_CHANS);
 	unsigned	rankBitWidth = dramsim_log2(cfg.NUM_RANKS);
 	unsigned	bankBitWidth = dramsim_log2(cfg.NUM_BANKS);
@@ -49,10 +48,13 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 	// Since we're assuming that a request is for BL*BUS_WIDTH, the bottom bits
 	// of this address *should* be all zeros if it's not, issue a warning
 
+#if WARN_ALIGNMENT
 	if ((physicalAddress & transactionMask) != 0)
 	{
-		DEBUG("WARNING: address 0x"<<std::hex<<physicalAddress<<std::dec<<" is not aligned to the request size of "<<transactionSize); 
+		uint64_t transactionMask =  transactionSize - 1; //ex: (64 bit bus width) x (8 Burst Length) - 1 = 64 bytes - 1 = 63 = 0x3f mask DEBUG("WARNING: address 0x"<<std::hex<<physicalAddress<<std::dec<<" is not aligned to the request size of "<<transactionSize); 
 	}
+#endif
+
 
 	// each burst will contain JEDEC_DATA_BUS_BITS/8 bytes of data, so the bottom bits (3 bits for a single channel DDR system) are
 	// 	thrown away before mapping the other bits
@@ -88,7 +90,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 	}
 
 	//perform various address mapping schemes
-	if (cfg.addressMappingScheme == Scheme1)
+	if (cfg.ADDRESS_MAPPING_SCHEME == Scheme1)
 	{
 		//chan:rank:row:col:bank
 		tempA = physicalAddress;
@@ -117,7 +119,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 		newTransactionChan = tempA ^ tempB;
 
 	}
-	else if (cfg.addressMappingScheme == Scheme2)
+	else if (cfg.ADDRESS_MAPPING_SCHEME == Scheme2)
 	{
 		//chan:row:col:bank:rank
 		tempA = physicalAddress;
@@ -146,7 +148,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 		newTransactionChan = tempA ^ tempB;
 
 	}
-	else if (cfg.addressMappingScheme == Scheme3)
+	else if (cfg.ADDRESS_MAPPING_SCHEME == Scheme3)
 	{
 		//chan:rank:bank:col:row
 		tempA = physicalAddress;
@@ -175,7 +177,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 		newTransactionChan = tempA ^ tempB;
 
 	}
-	else if (cfg.addressMappingScheme == Scheme4)
+	else if (cfg.ADDRESS_MAPPING_SCHEME == Scheme4)
 	{
 		//chan:rank:bank:row:col
 		tempA = physicalAddress;
@@ -204,7 +206,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 		newTransactionChan = tempA ^ tempB;
 
 	}
-	else if (cfg.addressMappingScheme == Scheme5)
+	else if (cfg.ADDRESS_MAPPING_SCHEME == Scheme5)
 	{
 		//chan:row:col:rank:bank
 
@@ -235,7 +237,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 
 
 	}
-	else if (cfg.addressMappingScheme == Scheme6)
+	else if (cfg.ADDRESS_MAPPING_SCHEME == Scheme6)
 	{
 		//chan:row:bank:rank:col
 
@@ -267,7 +269,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 
 	}
 	// clone of scheme 5, but channel moved to lower bits
-	else if (cfg.addressMappingScheme == Scheme7)
+	else if (cfg.ADDRESS_MAPPING_SCHEME == Scheme7)
 	{
 		//row:col:rank:bank:chan
 		tempA = physicalAddress;
@@ -296,7 +298,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 		newTransactionRow = tempA ^ tempB;
 
 	}
-	else if (cfg.addressMappingScheme == Scheme8)
+	else if (cfg.ADDRESS_MAPPING_SCHEME == Scheme8)
 	  {
 		//col:row:bank:rank:chan
 		tempA = physicalAddress;
