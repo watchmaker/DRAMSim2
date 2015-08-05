@@ -299,7 +299,7 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 
 	}
 	else if (cfg.ADDRESS_MAPPING_SCHEME == Scheme8)
-	  {
+	{
 		//col:row:bank:rank:chan
 		tempA = physicalAddress;
 		physicalAddress = physicalAddress >> channelBitWidth;
@@ -326,6 +326,35 @@ void addressMapping(uint64_t physicalAddress, unsigned &newTransactionChan, unsi
 		tempB = physicalAddress << colHighBitWidth;
 		newTransactionColumn = tempA ^ tempB;
 
+	}
+	else if (cfg.ADDRESS_MAPPING_SCHEME == Scheme9)
+	{
+            //this scheme tries to take advantage of row buffer hits 
+	    //row:bank:rank:chan:col
+	    tempA = physicalAddress;
+	    physicalAddress = physicalAddress >> colHighBitWidth;
+	    tempB = physicalAddress << colHighBitWidth;
+	    newTransactionColumn = tempA ^ tempB;
+
+	    tempA = physicalAddress;
+	    physicalAddress = physicalAddress >> channelBitWidth;
+	    tempB = physicalAddress << channelBitWidth;
+	    newTransactionChan = tempA ^ tempB;
+
+	    tempA = physicalAddress;
+	    physicalAddress = physicalAddress >> rankBitWidth;
+	    tempB = physicalAddress << rankBitWidth;
+	    newTransactionRank = tempA ^ tempB;
+
+	    tempA = physicalAddress;
+	    physicalAddress = physicalAddress >> bankBitWidth;
+	    tempB = physicalAddress << bankBitWidth;
+	    newTransactionBank = tempA ^ tempB;
+
+	    tempA = physicalAddress;
+	    physicalAddress = physicalAddress >> rowBitWidth;
+	    tempB = physicalAddress << rowBitWidth;
+	    newTransactionRow = tempA ^ tempB;
 	}
 
 	else
