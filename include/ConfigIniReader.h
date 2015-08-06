@@ -117,7 +117,8 @@ enum AddressMappingScheme
 	Scheme5,
 	Scheme6,
 	Scheme7,
-	Scheme8
+	Scheme8,
+	Scheme9
 };
 
 template <>
@@ -137,7 +138,9 @@ inline void ConfigOption<AddressMappingScheme>::set(const std::string &value_str
 	else if (value_str == "Scheme7")
 		value=Scheme7;
 	else if (value_str == "Scheme8")
-		value=Scheme8; 
+		value=Scheme8;
+	else if (value_str == "Scheme9")
+	  value=Scheme9;
 	else 
 		std::cerr << "WARNING: Unknown value '"<< value_str<<"' for option "<<getName()<<", using default\n";
 }
