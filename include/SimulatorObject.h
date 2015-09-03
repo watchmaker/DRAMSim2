@@ -46,6 +46,7 @@ namespace DRAMSim
 			uint64_t currentClockCycle;
 			SimulatorObject(); 
 			void step();
+			void set_cycle(uint64_t cycle);
 			virtual void update()=0;
 	};
 }

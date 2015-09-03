@@ -53,4 +53,9 @@ void SimulatorObject::step()
 	currentClockCycle++;
 }
 
+void SimulatorObject::set_cycle(uint64_t cycle)
+{
+	currentClockCycle = cycle;
+}
+
 
